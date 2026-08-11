@@ -1,0 +1,41 @@
+{
+    "key": "bottle-wrap-v1",
+    "version": 1,
+    "coordinate_system": "normalized",
+    "output_size": {
+        "source": "variant_print_area",
+        "print_area": "default"
+    },
+    "safe_zones": [
+        {
+            "id": "primary-content",
+            "x": 0.08,
+            "y": 0.08,
+            "width": 0.84,
+            "height": 0.84
+        }
+    ],
+    "layers": [
+        {
+            "id": "background",
+            "type": "solid",
+            "colour": "#f7a7b7"
+        },
+        {
+            "id": "repeated-name",
+            "type": "personalisation_text_pattern",
+            "field": "name",
+            "font_family": "Fraunces",
+            "safe_zone": "primary-content"
+        },
+        {
+            "id": "character",
+            "type": "generation_asset",
+            "x": 0.29,
+            "y": 0.08,
+            "max_width": 0.42,
+            "max_height": 0.84,
+            "fit": "contain"
+        }
+    ]
+}

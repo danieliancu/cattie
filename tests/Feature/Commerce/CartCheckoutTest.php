@@ -1,0 +1,96 @@
+<?php
+
+namespace Tests\Feature\Commerce;
+
+use App\Domain\Artwork\Actions\ApproveArtwork;
+use App\Domain\Artwork\Actions\StartArtworkSession;
+use App\Enums\GenerationStatus;
+use App\Models\ArtworkStyle;
+use App\Models\Cart;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+class CartCheckoutTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function approved(string $token = 'owner-secret'): array
+    {
+        Storage::fake('local');
+        $product = Product::factory()->create();
+        $variant = ProductVariant::factory()->for($product)->create(['price_minor' => 2499]);
+        $style = ArtworkStyle::query()->create(['name' => 'Storybook Cartoon', 'slug' => 'storybook-cartoon', 'prompt_key' => 'storybook', 'is_active' => true]);
+        $product->artworkStyles()->attach($style);
+        [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation' => []], $token);
+        $upload = $session->uploads()->create(['disk' => 'local', 'storage_key' => 'original', 'mime_type' => 'image/jpeg', 'size_bytes' => 1, 'sha256' => str_repeat('a', 64)]);
+        $generation = $session->generations()->create(['upload_id' => $upload->id, 'product_id' => $product->id, 'product_variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'prompt_key' => 'storybook-v1', 'prompt_version' => 1, 'resolved_prompt' => 'safe', 'provider' => 'fake', 'model' => 'gpt-image-2', 'status' => GenerationStatus::Succeeded, 'cost_currency' => 'USD']);
+        Storage::disk('local')->put('preview.webp', 'preview');
+        $asset = $generation->assets()->create(['kind' => 'web_preview', 'disk' => 'local', 'storage_key' => 'preview.webp', 'mime_type' => 'image/webp']);
+        app(ApproveArtwork::class)->handle($session, $asset);
+
+        return [$session->fresh(), $variant, $asset];
+    }
+
+    public function test_approved_artwork_add_is_authoritative_idempotent_and_guest_isolated(): void
+    {
+        [$session, $variant] = $this->approved();
+        $url = route('artwork.cart', $session->public_id);
+        $this->withCookie('cattie_guest_token', 'other')->post($url)->assertNotFound();
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post($url, ['unit_price_minor' => 1])->assertRedirect(route('cart.index'));
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post($url)->assertRedirect(route('cart.index'));
+        $this->assertDatabaseCount('cart_items', 1);
+        $this->assertDatabaseHas('cart_items', ['artwork_session_id' => $session->id, 'unit_price_minor' => $variant->price_minor, 'quantity' => 1]);
+    }
+
+    public function test_quantity_limits_and_price_refresh_are_server_authoritative(): void
+    {
+        [$session, $variant] = $this->approved();
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id));
+        $item = Cart::query()->first()->items()->first();
+        $this->withCookie('cattie_guest_token', 'owner-secret')->patch(route('cart.quantity', $item), ['quantity' => 11])->assertSessionHasErrors('quantity');
+        $variant->update(['price_minor' => 2799]);
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('cart.index'))->assertOk()->assertSee('£27.99');
+        $this->assertSame(2799, $item->fresh()->unit_price_minor);
+    }
+
+    public function test_checkout_creates_one_immutable_unpayable_awaiting_payment_order(): void
+    {
+        [$session, $variant, $asset] = $this->approved();
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id));
+        $cart = Cart::query()->first();
+        $payload = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => fake()->uuid(), 'first_name' => ' Mia ', 'last_name' => 'Smith', 'email' => 'MIA@EXAMPLE.COM', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'sw1a 1aa', 'country' => 'GB'];
+        $response = $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $payload);
+        $order = $cart->fresh()->convertedOrder;
+        $response->assertRedirect(route('checkout.payment', $order->number));
+        $this->assertSame('awaiting_payment', $order->status->value);
+        $this->assertFalse($order->is_payable);
+        $this->assertNull($order->total_minor);
+        $this->assertSame('mia@example.com', $order->email);
+        $this->assertSame('SW1A 1AA', $order->shipping_address['postcode']);
+        $this->assertDatabaseHas('order_items', ['order_id' => $order->id, 'generation_asset_id' => $asset->id, 'unit_price_minor' => $variant->price_minor]);
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $payload)->assertRedirect(route('checkout.payment', $order->number));
+        $this->assertDatabaseCount('orders', 1);
+        $variant->update(['price_minor' => 9999]);
+        $this->assertSame(2499, $order->items()->first()->unit_price_minor);
+        $this->withCookie('cattie_guest_token', 'other')->get(route('checkout.payment', $order->number))->assertNotFound();
+    }
+
+    public function test_price_change_interrupts_checkout_and_linked_expired_artwork_survives_purge(): void
+    {
+        [$session, $variant] = $this->approved();
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id));
+        $cart = Cart::query()->first();
+        $oldHash = $cart->pricing_hash;
+        $variant->update(['price_minor' => 2899]);
+        $payload = ['pricing_hash' => $oldHash, 'checkout_idempotency_key' => fake()->uuid(), 'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'mia@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A1AA', 'country' => 'GB'];
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $payload)->assertSessionHasErrors('pricing_hash');
+        $this->assertDatabaseCount('orders', 0);
+        DB::table('artwork_sessions')->where('id', $session->id)->update(['status' => 'failed', 'expires_at' => now()->subDay()]);
+        $this->artisan('artwork:purge-expired')->assertSuccessful();
+        $this->assertDatabaseHas('artwork_sessions', ['id' => $session->id]);
+    }
+}
