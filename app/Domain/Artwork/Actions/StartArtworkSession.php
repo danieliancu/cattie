@@ -16,6 +16,16 @@ class StartArtworkSession
 
     public function handle(Product $product, array $input, ?string $existingToken = null): array
     {
+        [$variant, $style, $snapshot] = $this->validatedConfiguration($product, $input);
+        $token = $existingToken ?: Str::random(64);
+        $session = ArtworkSession::query()->create(['public_id' => (string) Str::ulid(), 'access_token_hash' => hash('sha256', $token), 'product_id' => $product->id, 'product_variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation_snapshot' => $snapshot, 'status' => ArtworkSessionStatus::AwaitingUpload, 'expires_at' => now()->addDays(config('artwork.retention_days'))]);
+        $this->analytics->handle('artwork_session_started', $session);
+
+        return [$session, $token];
+    }
+
+    public function validatedConfiguration(Product $product, array $input): array
+    {
         $variant = $product->variants()->active()->find($input['variant_id'] ?? null);
         $style = $product->artworkStyles()->find($input['artwork_style_id'] ?? null);
         if (! $variant || ! $style) {
@@ -38,10 +48,7 @@ class StartArtworkSession
             } $rules['personalisation.'.$field->key] = $rule;
         } $values = Validator::make($input, $rules)->validate()['personalisation'] ?? [];
         $snapshot = $fields->map(fn ($field) => ['key' => $field->key, 'label' => $field->label, 'type' => $field->type->value, 'value' => $values[$field->key] ?? null])->all();
-        $token = $existingToken ?: Str::random(64);
-        $session = ArtworkSession::query()->create(['public_id' => (string) Str::ulid(), 'access_token_hash' => hash('sha256', $token), 'product_id' => $product->id, 'product_variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation_snapshot' => $snapshot, 'status' => ArtworkSessionStatus::AwaitingUpload, 'expires_at' => now()->addDays(config('artwork.retention_days'))]);
-        $this->analytics->handle('artwork_session_started', $session);
 
-        return [$session, $token];
+        return [$variant, $style, $snapshot];
     }
 }

@@ -28,9 +28,27 @@ class ArtworkSessionTest extends TestCase
         $variant = ProductVariant::factory()->for($product)->create();
         $style = ArtworkStyle::query()->create(['name' => 'Storybook', 'slug' => 'storybook-cartoon', 'prompt_key' => 'storybook', 'is_active' => true]);
         $product->artworkStyles()->attach($style);
-        $product->personalisationFields()->create(['key' => 'name', 'label' => 'Name', 'type' => 'text', 'is_required' => true, 'validation_rules' => ['max' => 20]]);
+        $product->personalisationFields()->create(['key' => 'name', 'label' => 'Name', 'type' => 'text', 'is_required' => true, 'validation_rules' => ['max' => 12]]);
 
         return [$product, $variant, $style];
+    }
+
+    public function test_name_is_limited_to_twelve_characters_including_spaces(): void
+    {
+        [$product, $variant, $style] = $this->catalogue();
+        [$session] = app(StartArtworkSession::class)->handle($product, [
+            'variant_id' => $variant->id,
+            'artwork_style_id' => $style->id,
+            'personalisation' => ['name' => 'Mary Ann Doe'],
+        ]);
+        $this->assertSame('Mary Ann Doe', $session->personalisation_snapshot[0]['value']);
+
+        $this->expectException(ValidationException::class);
+        app(StartArtworkSession::class)->handle($product, [
+            'variant_id' => $variant->id,
+            'artwork_style_id' => $style->id,
+            'personalisation' => ['name' => 'Mary Ann Doe!'],
+        ]);
     }
 
     public function test_valid_guest_session_starts_and_invalid_selection_is_rejected(): void
@@ -73,13 +91,12 @@ class ArtworkSessionTest extends TestCase
 
         $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.upload', $session->public_id), [
             'photo' => UploadedFile::fake()->image('duplicate.jpg', 800, 900),
-        ])->assertRedirect(route('artwork.show', $session->public_id));
+        ])->assertRedirect(route('products.show', $session->product->slug));
         $this->assertDatabaseCount('uploads', 0);
     }
 
-    public function test_regeneration_is_immutable_and_limit_is_enforced(): void
+    public function test_regeneration_is_immutable_and_has_no_generation_limit(): void
     {
-        config(['artwork.max_generations_per_session' => 3]);
         [$product,$variant,$style] = $this->catalogue();
         [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation' => ['name' => 'Mia']]);
         $upload = $session->uploads()->create(['disk' => 'local', 'storage_key' => 'x', 'mime_type' => 'image/jpeg', 'size_bytes' => 1, 'sha256' => str_repeat('a', 64)]);
@@ -88,10 +105,11 @@ class ArtworkSessionTest extends TestCase
         $first = app(RequestArtworkGeneration::class)->handle($session);
         $second = app(RequestArtworkGeneration::class)->handle($session->fresh(), true);
         $third = app(RequestArtworkGeneration::class)->handle($session->fresh(), true);
-        $this->assertSame($first->id, $second->parent_generation_id);
-        $this->assertDatabaseCount('generations', 3);
-        $this->expectException(ValidationException::class);
         app(RequestArtworkGeneration::class)->handle($session->fresh(), true);
+        app(RequestArtworkGeneration::class)->handle($session->fresh(), true);
+        $this->assertSame($first->id, $second->parent_generation_id);
+        $this->assertSame(3, $third->parameters['generation_sequence']);
+        $this->assertDatabaseCount('generations', 5);
     }
 
     public function test_approval_rejects_cross_session_asset(): void

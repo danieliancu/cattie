@@ -4,6 +4,7 @@ namespace Tests\Feature\Commerce;
 
 use App\Domain\Artwork\Actions\ApproveArtwork;
 use App\Domain\Artwork\Actions\StartArtworkSession;
+use App\Enums\ArtworkSessionStatus;
 use App\Enums\GenerationStatus;
 use App\Models\ArtworkStyle;
 use App\Models\Cart;
@@ -17,6 +18,23 @@ use Tests\TestCase;
 class CartCheckoutTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_preview_can_be_added_directly_and_is_approved_in_the_same_action(): void
+    {
+        [$session] = $this->approved();
+        $session->approvedAsset?->update(['is_selected' => false, 'selected_at' => null]);
+        $session->update(['status' => ArtworkSessionStatus::PreviewReady, 'current_generation_id' => $session->approvedAsset->generation_id, 'approved_generation_asset_id' => null, 'approved_at' => null]);
+
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('products.show', $session->product->slug))
+            ->assertOk()->assertSee('Add to basket')->assertSee('Change artwork')->assertDontSee('Love it');
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id))
+            ->assertRedirect(route('cart.index'));
+
+        $this->assertSame(ArtworkSessionStatus::Approved, $session->fresh()->status);
+        $this->assertDatabaseHas('cart_items', ['artwork_session_id' => $session->id]);
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('cart.index'))
+            ->assertOk()->assertSee('aria-label="1 items in basket"', false);
+    }
 
     private function approved(string $token = 'owner-secret'): array
     {
@@ -92,5 +110,18 @@ class CartCheckoutTest extends TestCase
         DB::table('artwork_sessions')->where('id', $session->id)->update(['status' => 'failed', 'expires_at' => now()->subDay()]);
         $this->artisan('artwork:purge-expired')->assertSuccessful();
         $this->assertDatabaseHas('artwork_sessions', ['id' => $session->id]);
+    }
+
+    public function test_cart_hides_approved_session_from_product_until_change_artwork_removes_item(): void
+    {
+        [$session] = $this->approved();
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id));
+        $item = Cart::query()->firstOrFail()->items()->firstOrFail();
+
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('products.show', $session->product->slug))->assertOk()->assertSee('Upload photo')->assertSee('Preview')->assertDontSee('This is the one.');
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('cart.change-artwork', $item))->assertRedirect(route('products.show', $session->product->slug));
+        $this->assertDatabaseMissing('cart_items', ['id' => $item->id]);
+        $this->assertSame(ArtworkSessionStatus::PreviewReady, $session->fresh()->status);
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('products.show', $session->product->slug))->assertOk()->assertSee('Your artwork is ready.')->assertDontSee('This is the one.');
     }
 }

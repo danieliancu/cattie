@@ -59,6 +59,16 @@ class ArtworkSession extends Model
         return $this->belongsTo(GenerationAsset::class, 'approved_generation_asset_id');
     }
 
+    public function composedDesigns()
+    {
+        return $this->hasMany(ComposedDesign::class);
+    }
+
+    public function approvedComposedDesign()
+    {
+        return $this->belongsTo(ComposedDesign::class, 'approved_composed_design_id');
+    }
+
     public function cartItems()
     {
         return $this->hasMany(CartItem::class);

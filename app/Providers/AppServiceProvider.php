@@ -4,13 +4,16 @@ namespace App\Providers;
 
 use App\Contracts\ImageGenerationProvider;
 use App\Contracts\PaymentProvider;
+use App\Domain\Cart\Actions\ResolveGuestCart;
 use App\Domain\Payments\Contracts\ShippingResolver;
 use App\Domain\Payments\Contracts\TaxResolver;
 use App\Domain\Payments\Resolvers\FreeUkShippingResolver;
 use App\Domain\Payments\Resolvers\ZeroUkTaxResolver;
+use App\Models\Product;
 use App\Providers\ImageGeneration\FakeImageGenerationProvider;
 use App\Providers\ImageGeneration\OpenAiImageGenerationProvider;
 use App\Providers\Payments\FakePaymentProvider;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use RuntimeException;
 
@@ -40,6 +43,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        View::composer('layouts.storefront', function ($view) {
+            [$cart] = app(ResolveGuestCart::class)->handle(request(), false);
+            $view->with([
+                'basketItemCount' => (int) ($cart?->items()->sum('quantity') ?? 0),
+                'searchProducts' => Product::query()->active()->ordered()->get(['name', 'slug'])
+                    ->map(fn (Product $product) => ['name' => $product->name, 'url' => route('products.show', $product->slug)])
+                    ->values(),
+            ]);
+        });
     }
 }

@@ -2,14 +2,18 @@
 
 namespace App\Http\Controllers\Storefront;
 
+use App\Domain\Artwork\Actions\ApproveArtwork;
 use App\Domain\Cart\Actions\AddApprovedArtworkToCart;
 use App\Domain\Cart\Actions\RefreshCartPrices;
 use App\Domain\Cart\Actions\ResolveGuestCart;
 use App\Domain\Cart\Actions\UpdateCartQuantity;
+use App\Enums\ArtworkSessionStatus;
 use App\Http\Controllers\Controller;
 use App\Models\ArtworkSession;
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Models\ComposedDesign;
+use App\Models\GenerationAsset;
 use App\Support\GuestContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,10 +21,27 @@ use Illuminate\View\View;
 
 class CartController extends Controller
 {
-    public function add(string $publicId, Request $request, ResolveGuestCart $resolve, AddApprovedArtworkToCart $add, GuestContext $guest): RedirectResponse
+    public function add(string $publicId, Request $request, ResolveGuestCart $resolve, AddApprovedArtworkToCart $add, ApproveArtwork $approve, GuestContext $guest): RedirectResponse
     {
         $session = ArtworkSession::query()->where('public_id', $publicId)->firstOrFail();
         abort_unless($guest->owns($session->access_token_hash, $request), 404);
+        if ($session->status === ArtworkSessionStatus::PreviewReady) {
+            $session->load(['product.designTemplate', 'currentGeneration.assets', 'composedDesigns']);
+            $selection = $request->validate(['asset_id' => ['nullable', 'string'], 'design_id' => ['nullable', 'string']]);
+            $asset = isset($selection['asset_id'])
+                ? GenerationAsset::query()->whereKey($selection['asset_id'])->whereHas('generation', fn ($query) => $query->where('artwork_session_id', $session->id))->firstOrFail()
+                : ($session->product->designTemplate
+                    ? $session->currentGeneration?->assets->firstWhere('kind', 'provider_original')
+                    : ($session->currentGeneration?->assets->firstWhere('kind', 'web_preview') ?? $session->currentGeneration?->assets->firstWhere('kind', 'provider_original')));
+            $design = $session->product->designTemplate
+                ? (isset($selection['design_id'])
+                    ? ComposedDesign::query()->whereKey($selection['design_id'])->where('artwork_session_id', $session->id)->firstOrFail()
+                    : $session->composedDesigns->where('generation_asset_id', $asset?->id)->where('product_variant_id', $session->product_variant_id)->sortByDesc('created_at')->first())
+                : null;
+            abort_unless($asset, 422);
+            $approve->handle($session, $asset, $design);
+            $session->refresh();
+        }
         [$cart, $token] = $resolve->handle($request);
         $add->handle($cart, $session);
 
@@ -32,7 +53,7 @@ class CartController extends Controller
         [$cart] = $resolve->handle($request, false);
         if ($cart) {
             $prices->handle($cart);
-            $cart->load(['items.artworkSession', 'items.generationAsset', 'items.variant']);
+            $cart->load(['items.artworkSession', 'items.generationAsset', 'items.composedDesign', 'items.variant']);
         }
 
         return view('storefront.cart.index', compact('cart'));
@@ -62,11 +83,15 @@ class CartController extends Controller
     {
         $cart = $this->ownedCart($request, $resolve);
         abort_unless($item->cart_id === $cart->id, 404);
-        $publicId = $item->artworkSession()->value('public_id');
+        $session = $item->artworkSession()->with('product')->firstOrFail();
         $item->delete();
+        $session->update([
+            'status' => ArtworkSessionStatus::PreviewReady,
+            'expires_at' => now()->addDays(config('artwork.retention_days')),
+        ]);
         app(RefreshCartPrices::class)->handle($cart);
 
-        return redirect()->route('artwork.show', $publicId);
+        return redirect()->route('products.show', $session->product->slug);
     }
 
     private function ownedCart(Request $request, ResolveGuestCart $resolve): Cart

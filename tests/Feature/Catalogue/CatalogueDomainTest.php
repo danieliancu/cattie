@@ -62,8 +62,8 @@ class CatalogueDomainTest extends TestCase
         $this->assertTrue($bottle->is_active);
         $this->assertSame(1650, $bottle->base_price_minor);
         $this->assertSame([1650], $bottle->variants()->pluck('price_minor')->unique()->values()->all());
-        $this->assertSame(12, $bottle->variants()->count());
-        $this->assertSame(12, FulfilmentProductMapping::query()->where('provider', 'prodigi')->count());
+        $this->assertSame(4, $bottle->variants()->count());
+        $this->assertSame(4, FulfilmentProductMapping::query()->where('provider', 'prodigi')->count());
         $black = $bottle->variants()->where('sku', 'BOTTLE-650-BLACK')->firstOrFail();
         $this->assertSame(['color' => 'black', 'size' => '650ml / 22oz'], $black->fulfilmentMappings()->firstOrFail()->configuration['attributes']);
 
@@ -84,14 +84,15 @@ class CatalogueDomainTest extends TestCase
         Storage::disk('public')->assertExists('products/cattie-water-bottle/mockup/blank.jpg');
         foreach ($bottle->images as $image) {
             Storage::disk('public')->assertExists($image->storage_key);
-            $this->assertNotNull($image->product_variant_id);
         }
+        $this->assertSame(['black', 'grey', 'navy', 'red'], $bottle->variants()->orderBy('sort_order')->get()->pluck('options')->pluck('colour')->all());
 
         $unrelated = Product::query()->where('slug', 'childrens-storybook-wall-print')->firstOrFail();
         $this->assertFalse($unrelated->usesStaticMockupBoundary());
         $this->assertNull($unrelated->designTemplate);
 
         $this->assertSame('bottle-wrap-v1', $bottle->designTemplate->key);
+        $this->assertSame(12, $bottle->personalisationFields()->where('key', 'name')->firstOrFail()->validation_rules['max']);
         $this->assertSame(1, ProductDesignTemplate::query()->count());
         $definition = $bottle->designTemplate->definition();
         $this->assertSame('normalized', $definition['coordinate_system']);
@@ -99,25 +100,17 @@ class CatalogueDomainTest extends TestCase
         $this->assertStringNotContainsString('650ML-WATER-BOTTLE', json_encode($definition, JSON_THROW_ON_ERROR));
 
         $expectedResolutions = [
-            'black / translucent' => [2498, 1828],
             'black' => [2750, 2279],
             'grey' => [2750, 2279],
-            'lime' => [2716, 2125],
-            'mint green' => [2750, 2279],
             'navy' => [2750, 2279],
-            'orange' => [2750, 2279],
-            'pebble blue' => [2750, 2279],
             'red' => [2750, 2279],
-            'silver' => [2750, 2279],
-            'white / clear' => [2498, 1828],
-            'white' => [2750, 2279],
         ];
         foreach ($bottle->variants as $variant) {
             [$width, $height] = $expectedResolutions[$variant->options['colour']];
             $this->assertSame(['width' => $width, 'height' => $height], $variant->requiredPrintResolution('prodigi'));
         }
 
-        $white = $bottle->variants()->where('sku', 'BOTTLE-650-WHITE')->firstOrFail();
+        $white = $bottle->variants()->where('sku', 'BOTTLE-650-BLACK')->firstOrFail();
         $style = $bottle->artworkStyles()->firstOrFail();
         [$session] = app(StartArtworkSession::class)->handle($bottle, [
             'variant_id' => $white->id,
@@ -128,12 +121,14 @@ class CatalogueDomainTest extends TestCase
 
         $this->get('/products')->assertOk()->assertSee('products/cattie-water-bottle/catalogue/bottle01.jpg');
         $this->get('/products/cattie-water-bottle')->assertOk()
+            ->assertSee('Bottle examples')
+            ->assertSee('Official Prodigi product photography. These are not personalised mockups.')
             ->assertSee('products/cattie-water-bottle/catalogue/bottle01.jpg')
             ->assertSee('products/cattie-water-bottle/catalogue/bottle02.jpg')
             ->assertDontSee('products/cattie-water-bottle/mockup/blank.jpg');
 
         $this->seed(CatalogueSeeder::class);
-        $this->assertSame(12, FulfilmentProductMapping::query()->where('provider', 'prodigi')->count());
+        $this->assertSame(4, FulfilmentProductMapping::query()->where('provider', 'prodigi')->count());
         $this->assertSame(4, $bottle->fresh()->images()->count());
     }
 

@@ -20,16 +20,24 @@ class StorefrontCatalogueTest extends TestCase
         Product::factory()->create(['name' => 'Hidden Gift', 'slug' => 'hidden', 'is_active' => false]);
 
         $this->get(route('home'))->assertOk()->assertSee('Turn their favourite photo');
-        $response = $this->get(route('products.index'))->assertOk()->assertSee('First Gift')->assertSee('Second Gift')->assertDontSee('Hidden Gift');
+        $response = $this->get(route('products.index'))->assertOk()->assertSee('First Gift')->assertSee('Second Gift')->assertDontSee('Hidden Gift')
+            ->assertSee('product-search-results')->assertSee('filteredProducts()', false)
+            ->assertSee('@focus="searchOpen=true"', false)
+            ->assertSee('Get unique gift ideas')->assertSee('Subscribe')->assertSee('About Us')->assertSee('Customer Service')->assertSee('Contact Us')
+            ->assertSee('Email:support@cattie.uk')->assertDontSee('uk.callie.com')->assertDontSee('messenger.com')->assertDontSee('wa.me');
         $this->assertLessThan(strpos($response->getContent(), 'Second Gift'), strpos($response->getContent(), 'First Gift'));
+        $this->get(route('products.index', ['q' => 'First']))->assertOk()->assertSee('First Gift')
+            ->assertViewHas('products', fn ($products) => $products->count() === 1 && $products->first()->name === 'First Gift');
     }
 
     public function test_product_routes_by_slug_and_inactive_product_returns_not_found(): void
     {
         $active = Product::factory()->create(['slug' => 'a-lovely-gift']);
+        $related = Product::factory()->create(['name' => 'Another Lovely Gift', 'slug' => 'another-lovely-gift']);
         $inactive = Product::factory()->create(['slug' => 'not-for-sale', 'is_active' => false]);
 
-        $this->get(route('products.show', $active->slug))->assertOk()->assertSee($active->name);
+        $this->get(route('products.show', $active->slug))->assertOk()->assertSee($active->name)
+            ->assertSee('You might also like')->assertSee($related->name)->assertDontSee($inactive->name);
         $this->get(route('products.show', $inactive->slug))->assertNotFound();
     }
 

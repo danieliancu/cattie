@@ -22,6 +22,11 @@ class ProductDesignTemplate extends Model
         return $this->hasMany(Product::class);
     }
 
+    public function composedDesigns()
+    {
+        return $this->hasMany(ComposedDesign::class);
+    }
+
     public function definition(): array
     {
         $root = realpath(resource_path('product-designs'));

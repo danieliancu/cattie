@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Contracts\ImageGenerationProvider;
 use App\Data\ImageGenerationRequest;
 use App\Domain\Artwork\Actions\RecordAnalyticsEvent;
+use App\Domain\Artwork\Actions\RenderComposedDesign;
 use App\Enums\ArtworkSessionStatus;
 use App\Enums\GenerationStatus;
 use App\Exceptions\ImageGenerationException;
@@ -14,7 +15,9 @@ use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class GenerateArtwork implements ShouldBeUnique, ShouldQueue
 {
@@ -41,7 +44,7 @@ class GenerateArtwork implements ShouldBeUnique, ShouldQueue
         return [10, 60];
     }
 
-    public function handle(ImageGenerationProvider $provider, AiGenerationCostCalculator $costs, RecordAnalyticsEvent $analytics): void
+    public function handle(ImageGenerationProvider $provider, AiGenerationCostCalculator $costs, RecordAnalyticsEvent $analytics, ?RenderComposedDesign $renderDesign = null): void
     {
         $generation = Generation::query()->findOrFail($this->generation->id);
         if (! in_array($generation->status, [GenerationStatus::Queued, GenerationStatus::Pending], true) || $generation->assets()->exists()) {
@@ -52,7 +55,8 @@ class GenerateArtwork implements ShouldBeUnique, ShouldQueue
             $result = $provider->generate(new ImageGenerationRequest($generation->id, $generation->resolved_prompt, Storage::disk($input->disk)->path($input->storage_key), $input->mime_type, $generation->model, $generation->quality, $generation->output_size, $generation->candidate_count, (int) ($generation->parameters['generation_sequence'] ?? 1)));
             $key = 'artwork/generated/'.bin2hex(random_bytes(20)).'.png';
             Storage::disk('local')->put($key, $result->contents);
-            $asset = $generation->assets()->create(['kind' => 'provider_original', 'disk' => 'local', 'storage_key' => $key, 'mime_type' => $result->mimeType, 'size_bytes' => strlen($result->contents)]);
+            $sourceSize = @getimagesizefromstring($result->contents);
+            $asset = $generation->assets()->create(['kind' => 'provider_original', 'disk' => 'local', 'storage_key' => $key, 'mime_type' => $result->mimeType, 'size_bytes' => strlen($result->contents), 'width' => $sourceSize[0] ?? null, 'height' => $sourceSize[1] ?? null]);
             $previewImage = @imagecreatefromstring($result->contents);
             $previewBytes = $result->contents;
             $previewMime = $result->mimeType;
@@ -82,6 +86,11 @@ class GenerateArtwork implements ShouldBeUnique, ShouldQueue
             $generation->assets()->create(['kind' => 'web_preview', 'disk' => 'local', 'storage_key' => $previewKey, 'mime_type' => $previewMime, 'size_bytes' => strlen($previewBytes)]);
             $cost = $costs->calculate($generation->model, $generation->quality, $generation->output_size, $result->usage);
             $generation->update(['status' => GenerationStatus::Succeeded, 'provider_request_id' => $result->requestId, 'usage_metadata' => $result->usage, 'parameters' => $result->metadata, 'cost_micros' => $cost['micros'], 'cost_currency' => $cost['currency'], 'cost_basis' => $cost['basis'], 'pricing_version' => $cost['pricing_version'], 'completed_at' => now()]);
+            unset($previewBytes, $result);
+            gc_collect_cycles();
+            if ($generation->artworkSession->product->designTemplate) {
+                ($renderDesign ?? app(RenderComposedDesign::class))->handle($generation->artworkSession, $asset);
+            }
             $generation->artworkSession->update(['status' => ArtworkSessionStatus::PreviewReady]);
             $analytics->handle('generation_succeeded', $generation);
         } catch (ImageGenerationException $e) {
@@ -92,6 +101,9 @@ class GenerateArtwork implements ShouldBeUnique, ShouldQueue
             $generation->update(['status' => GenerationStatus::Failed, 'failure_reason' => $e->getMessage(), 'failure_category' => $e->category, 'provider_error_code' => $e->providerCode, 'is_retryable' => $e->retryable, 'completed_at' => now()]);
             $generation->artworkSession->update(['status' => ArtworkSessionStatus::Failed]);
             $analytics->handle('generation_failed', $generation);
+        } catch (Throwable $e) {
+            Log::error('Composed design rendering failed.', ['artwork_session_id' => $generation->artwork_session_id, 'generation_id' => $generation->id, 'exception' => $e::class, 'message' => $e->getMessage()]);
+            $generation->artworkSession->update(['status' => ArtworkSessionStatus::Failed]);
         }
     }
 }

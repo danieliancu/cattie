@@ -46,6 +46,11 @@ class CartItem extends Model
         return $this->belongsTo(Generation::class);
     }
 
+    public function composedDesign()
+    {
+        return $this->belongsTo(ComposedDesign::class);
+    }
+
     public function lineTotalMinor(): int
     {
         return $this->unit_price_minor * $this->quantity;

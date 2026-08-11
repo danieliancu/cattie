@@ -46,6 +46,8 @@ class NormaliseArtworkUpload implements ShouldQueue
         $key = 'artwork/normalised/'.bin2hex(random_bytes(20)).'.webp';
         Storage::disk('local')->put($key, $bytes);
         $this->upload->assets()->create(['kind' => 'ai_input', 'disk' => 'local', 'storage_key' => $key, 'mime_type' => 'image/webp', 'size_bytes' => strlen($bytes), 'width' => $newW, 'height' => $newH]);
+        unset($source, $bytes);
+        gc_collect_cycles();
         $session = $this->upload->artworkSession;
         $request->handle($session);
     }

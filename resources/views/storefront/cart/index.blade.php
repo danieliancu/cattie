@@ -8,12 +8,12 @@
             <div class="mt-10 grid gap-8 lg:grid-cols-[1fr_20rem]">
                 <div class="space-y-5">@foreach($cart->items as $item)
                     <article class="grid gap-5 rounded-[2rem] bg-white p-5 sm:grid-cols-[9rem_1fr]">
-                        <img src="{{ route('artwork.assets', [$item->artworkSession->public_id, $item->generationAsset]) }}" alt="Approved {{ $item->artwork_style_name }} artwork" class="aspect-[2/3] w-full rounded-2xl object-cover">
+                        <img src="{{ $item->composedDesign ? route('artwork.designs', [$item->artworkSession->public_id, $item->composedDesign]) : route('artwork.assets', [$item->artworkSession->public_id, $item->generationAsset]) }}" alt="Approved {{ $item->artwork_style_name }} design" class="aspect-[2/3] w-full rounded-2xl object-cover">
                         <div><h2 class="font-display text-2xl">{{ $item->product_name }}</h2><p class="mt-1 text-sm text-muted">{{ $item->variant_name }} · {{ $item->artwork_style_name }}</p>
                             @foreach($item->personalisation ?? [] as $field)<p class="mt-2 text-sm"><span class="text-muted">{{ $field['label'] ?? $field['key'] ?? 'Personalisation' }}:</span> {{ $field['value'] ?? '' }}</p>@endforeach
                             <div class="mt-5 flex flex-wrap items-center gap-4"><form method="POST" action="{{ route('cart.quantity', $item) }}" class="flex items-center gap-2">@csrf @method('PATCH')<label for="quantity-{{ $item->id }}" class="text-sm font-bold">Quantity</label><select id="quantity-{{ $item->id }}" name="quantity" onchange="this.form.submit()" class="rounded-xl border border-rose/30 bg-white px-3 py-2">@for($n=1;$n<=config('commerce.max_quantity');$n++)<option value="{{ $n }}" @selected($item->quantity===$n)>{{ $n }}</option>@endfor</select></form>
                                 <span class="ml-auto font-bold">£{{ number_format($item->lineTotalMinor()/100, 2) }}</span></div>
-                            <div class="mt-4 flex gap-5 text-sm"><form method="POST" action="{{ route('cart.change-artwork',$item) }}">@csrf<button class="font-bold text-coral underline">Change artwork</button></form><form method="POST" action="{{ route('cart.remove',$item) }}">@csrf @method('DELETE')<button class="text-muted underline">Remove</button></form></div>
+                            <div class="mt-4 flex gap-5 text-sm"><form method="POST" action="{{ route('cart.change-artwork',$item) }}">@csrf<button class="cursor-pointer font-bold text-coral underline">Change artwork</button></form><form method="POST" action="{{ route('cart.remove',$item) }}">@csrf @method('DELETE')<button class="cursor-pointer text-muted underline">Remove</button></form></div>
                         </div>
                     </article>
                 @endforeach</div>

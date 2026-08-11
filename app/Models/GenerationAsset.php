@@ -22,4 +22,9 @@ class GenerationAsset extends Model
     {
         return $this->belongsTo(Generation::class);
     }
+
+    public function composedDesigns()
+    {
+        return $this->hasMany(ComposedDesign::class);
+    }
 }

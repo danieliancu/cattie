@@ -2,27 +2,38 @@
 
 namespace App\Http\Controllers\Storefront;
 
+use App\Domain\Artwork\Actions\ResolveResumableArtworkSession;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class ProductController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
+        $search = trim((string) $request->query('q', ''));
         $products = Product::query()
+            ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search) {
+                $query->where('name', 'like', '%'.$search.'%')
+                    ->orWhere('short_description', 'like', '%'.$search.'%')
+                    ->orWhere('description', 'like', '%'.$search.'%');
+            }))
             ->active()->ordered()
             ->with(['images', 'variants' => fn ($query) => $query->active()->ordered()])
-            ->paginate(12);
+            ->paginate(12)
+            ->withQueryString();
 
-        return view('storefront.products.index', compact('products'));
+        return view('storefront.products.index', compact('products', 'search'));
     }
 
-    public function show(string $slug): View
+    public function show(string $slug, Request $request, ResolveResumableArtworkSession $resolve): Response
     {
         $product = Product::query()->active()->where('slug', $slug)
             ->with([
                 'images',
+                'designTemplate',
                 'variants' => fn ($query) => $query->active()->ordered(),
                 'artworkStyles',
                 'recommendedArtworkStyle',
@@ -38,7 +49,17 @@ class ProductController extends Controller
         )) ?? $product->variants->first();
         $defaultImage = $product->images->firstWhere('product_variant_id', $defaultVariant?->id)
             ?? $product->primaryImage();
+        $session = $resolve->handle($product, $request);
+        $relatedProducts = Product::query()
+            ->active()
+            ->where('id', '!=', $product->id)
+            ->ordered()
+            ->with(['images', 'variants' => fn ($query) => $query->active()->ordered()])
+            ->limit(4)
+            ->get();
 
-        return view('storefront.products.show', compact('product', 'recommendedStyle', 'defaultVariant', 'defaultImage'));
+        return response()
+            ->view('storefront.products.show', compact('product', 'recommendedStyle', 'defaultVariant', 'defaultImage', 'session', 'relatedProducts'))
+            ->header('Cache-Control', 'private, no-store, max-age=0');
     }
 }

@@ -12,9 +12,14 @@ Route::get('/products', [ProductController::class, 'index'])->name('products.ind
 Route::get('/products/{slug}', [ProductController::class, 'show'])->name('products.show');
 Route::post('/products/{product:slug}/artwork', [ArtworkController::class, 'start'])->middleware('throttle:10,1')->name('artwork.start');
 Route::get('/artwork/{publicId}', [ArtworkController::class, 'show'])->name('artwork.show');
-Route::post('/artwork/{publicId}/upload', [ArtworkController::class, 'upload'])->middleware('throttle:5,1')->name('artwork.upload');
+Route::post('/artwork/{publicId}/upload', [ArtworkController::class, 'upload'])->middleware('throttle:30,1')->name('artwork.upload');
 Route::get('/artwork/{publicId}/status', [ArtworkController::class, 'status'])->middleware('throttle:30,1')->name('artwork.status');
 Route::get('/artwork/{publicId}/assets/{asset}', [ArtworkController::class, 'asset'])->name('artwork.assets');
+Route::get('/artwork/{publicId}/designs/{design}', [ArtworkController::class, 'design'])->name('artwork.designs');
+Route::get('/artwork/{publicId}/designs/{design}/editor-background', [ArtworkController::class, 'designEditorBackground'])->name('artwork.design-editor-background');
+Route::post('/artwork/{publicId}/designs/{design}/layout', [ArtworkController::class, 'designLayout'])->middleware('throttle:30,1')->name('artwork.design-layout');
+Route::post('/artwork/{publicId}/variant', [ArtworkController::class, 'variant'])->name('artwork.variant');
+Route::post('/artwork/{publicId}/name', [ArtworkController::class, 'name'])->middleware('throttle:60,1')->name('artwork.name');
 Route::post('/artwork/{publicId}/regenerate', [ArtworkController::class, 'regenerate'])->middleware('throttle:5,1')->name('artwork.regenerate');
 Route::post('/artwork/{publicId}/approve', [ArtworkController::class, 'approve'])->name('artwork.approve');
 Route::post('/artwork/{publicId}/change', [ArtworkController::class, 'change'])->name('artwork.change');

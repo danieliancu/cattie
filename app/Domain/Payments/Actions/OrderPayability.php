@@ -11,7 +11,7 @@ class OrderPayability
 {
     public function check(Order $order): bool
     {
-        $order->loadMissing(['items.artworkSession', 'items.generation', 'items.generationAsset']);
+        $order->loadMissing(['items.artworkSession.product.designTemplate', 'items.generation', 'items.generationAsset', 'items.composedDesign']);
         $address = $order->shipping_address ?? [];
         $requiredAddress = ['first_name', 'last_name', 'address_line_1', 'city', 'postcode', 'country'];
 
@@ -21,6 +21,7 @@ class OrderPayability
                 && $item->artworkSession?->approved_generation_asset_id === $item->generation_asset_id
                 && $item->generation?->status === GenerationStatus::Succeeded
                 && $item->generationAsset !== null
+                && (! $item->artworkSession?->product?->designTemplate || ($item->composedDesign !== null && $item->artworkSession?->approved_composed_design_id === $item->composed_design_id))
                 && $item->currency === $order->currency)
             && $order->currency === 'GBP'
             && $order->subtotal_minor >= 0

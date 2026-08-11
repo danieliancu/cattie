@@ -55,7 +55,7 @@ class CatalogueSeeder extends Seeder
     {
         $designTemplate = ProductDesignTemplate::query()->updateOrCreate(
             ['key' => 'bottle-wrap-v1'],
-            ['version' => 1, 'definition_path' => 'bottle-wrap-v1/template.json'],
+            ['version' => 3, 'definition_path' => 'bottle-wrap-v1/template.json'],
         );
 
         $product = Product::query()->updateOrCreate(
@@ -71,7 +71,7 @@ class CatalogueSeeder extends Seeder
                 'currency' => 'GBP',
                 'artwork_requirements' => ['source_photo' => 'required', 'orientation' => 'portrait_preferred'],
                 'preview_configuration' => [
-                    'default_variant_options' => ['colour' => 'white'],
+                    'default_variant_options' => ['colour' => 'black'],
                     'mockup_mode' => 'static_boundary',
                     'mockup_asset' => [
                         'disk' => 'public',
@@ -91,7 +91,7 @@ class CatalogueSeeder extends Seeder
             ],
         );
 
-        $colours = ['black / translucent', 'black', 'grey', 'lime', 'mint green', 'navy', 'orange', 'pebble blue', 'red', 'silver', 'white / clear', 'white'];
+        $colours = ['black', 'grey', 'navy', 'red'];
         $printResolutions = [
             'black / translucent' => [2498, 1828],
             'lime' => [2716, 2125],
@@ -103,7 +103,7 @@ class CatalogueSeeder extends Seeder
             $internalSkus[] = $internalSku;
             $variant = $product->variants()->withTrashed()->updateOrCreate(
                 ['sku' => $internalSku],
-                ['name' => str($colour)->title().' · 650 ml', 'options' => ['colour' => $colour, 'size' => '650ml / 22oz'], 'price_minor' => 1650, 'currency' => 'GBP', 'is_active' => true, 'sort_order' => $index],
+                ['name' => ($colour === 'grey' ? 'Gray' : str($colour)->title()).' · 650 ml', 'options' => ['colour' => $colour, 'size' => '650ml / 22oz'], 'price_minor' => 1650, 'currency' => 'GBP', 'is_active' => true, 'sort_order' => $index],
             );
             if ($variant->trashed()) {
                 $variant->restore();
@@ -133,8 +133,8 @@ class CatalogueSeeder extends Seeder
             'key' => 'name',
             'label' => 'Name',
             'type' => 'text',
-            'is_required' => false,
-            'validation_rules' => ['max' => 30],
+            'is_required' => true,
+            'validation_rules' => ['max' => 12],
             'configuration' => [],
             'sort_order' => 0,
         ]);
@@ -153,7 +153,7 @@ class CatalogueSeeder extends Seeder
         foreach (collect($supplierAssets['assets'])->whereIn('role', ['primary', 'gallery', 'detail'])->sortBy('sort_order') as $asset) {
             $colour = $asset['variant_options']['colour'];
             $product->images()->create([
-                'product_variant_id' => $variantsByColour[$colour]->id,
+                'product_variant_id' => $variantsByColour->get($colour)?->id,
                 'disk' => $asset['public']['disk'],
                 'storage_key' => $asset['public']['storage_key'],
                 'alt_text' => $asset['alt_text'],

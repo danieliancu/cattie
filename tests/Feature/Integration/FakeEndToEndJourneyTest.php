@@ -11,6 +11,7 @@ use App\Models\ArtworkStyle;
 use App\Models\Cart;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use Database\Seeders\CatalogueSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -32,7 +33,7 @@ class FakeEndToEndJourneyTest extends TestCase
         [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation' => []], 'journey-owner');
         $this->withCookie('cattie_guest_token', 'journey-owner');
 
-        $this->post(route('artwork.upload', $session->public_id), ['photo' => UploadedFile::fake()->image('portrait.jpg', 800, 1000)])->assertRedirect(route('artwork.show', $session->public_id));
+        $this->post(route('artwork.upload', $session->public_id), ['photo' => UploadedFile::fake()->image('portrait.jpg', 800, 1000)])->assertRedirect(route('products.show', $product->slug));
         $session->refresh();
         $generation = $session->currentGeneration;
         $this->assertSame(ArtworkSessionStatus::PreviewReady, $session->status);
@@ -57,5 +58,34 @@ class FakeEndToEndJourneyTest extends TestCase
         $this->assertSame($preview->id, $order->items()->first()->generation_asset_id);
         $expected = ['artwork_session_started', 'photo_uploaded', 'generation_requested', 'generation_succeeded', 'artwork_approved', 'add_to_cart', 'checkout_started', 'order_created', 'payment_started', 'payment_succeeded', 'order_paid'];
         $this->assertEmpty(array_diff($expected, AnalyticsEvent::query()->pluck('name')->all()));
+    }
+
+    public function test_bottle_composed_design_journey_reaches_paid_and_snapshots_the_design(): void
+    {
+        ini_set('memory_limit', '256M');
+        Storage::fake('local');
+        Storage::fake('public');
+        $this->seed(CatalogueSeeder::class);
+        config(['queue.default' => 'sync', 'artwork.provider' => 'fake', 'artwork.fake_failure' => false, 'payments.provider' => 'fake', 'payments.fake.enabled' => true]);
+        $product = Product::query()->where('slug', 'cattie-water-bottle')->with(['variants', 'artworkStyles'])->firstOrFail();
+        $variant = $product->variants->first(fn ($candidate) => $candidate->options['colour'] === 'black');
+        $style = $product->artworkStyles->first();
+        [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation' => ['name' => 'Maria']], 'bottle-owner');
+
+        $this->withCookie('cattie_guest_token', 'bottle-owner')->post(route('artwork.upload', $session->public_id), ['photo' => UploadedFile::fake()->image('maria.jpg', 800, 1000)])->assertRedirect();
+        $session->refresh();
+        $design = $session->composedDesigns()->firstOrFail();
+        $asset = $design->generationAsset;
+        $this->assertSame([2750, 2279], [$design->width, $design->height]);
+        $this->withCookie('cattie_guest_token', 'bottle-owner')->post(route('artwork.approve', $session->public_id), ['asset_id' => $asset->id, 'design_id' => $design->id])->assertRedirect();
+        $this->withCookie('cattie_guest_token', 'bottle-owner')->post(route('artwork.cart', $session->public_id))->assertRedirect(route('cart.index'));
+        $cart = Cart::query()->firstOrFail();
+        $checkout = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => (string) Str::uuid(), 'first_name' => 'Maria', 'last_name' => 'Smith', 'email' => 'maria@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A 1AA', 'country' => 'GB'];
+        $this->withCookie('cattie_guest_token', 'bottle-owner')->post(route('checkout.store'), $checkout)->assertRedirect();
+        $order = $cart->fresh()->convertedOrder;
+        $this->assertSame($design->id, $order->items()->first()->composed_design_id);
+        $this->assertSame($design->id, $order->items()->first()->artwork_snapshot['composed_design_id']);
+        $this->withCookie('cattie_guest_token', 'bottle-owner')->post(route('checkout.pay', $order->number), ['idempotency_key' => (string) Str::uuid(), 'scenario' => 'success'])->assertRedirect();
+        $this->assertSame(OrderStatus::Paid, $order->fresh()->status);
     }
 }

@@ -35,4 +35,9 @@ class OrderItem extends Model
     {
         return $this->belongsTo(GenerationAsset::class);
     }
+
+    public function composedDesign()
+    {
+        return $this->belongsTo(ComposedDesign::class);
+    }
 }

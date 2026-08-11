@@ -30,7 +30,7 @@ class CreateOrderFromCart
                 return Order::query()->findOrFail($cart->converted_order_id);
             }
 
-            $cart->load(['items.artworkSession.approvedAsset.generation', 'items.product', 'items.variant']);
+            $cart->load(['items.artworkSession.approvedAsset.generation', 'items.artworkSession.approvedComposedDesign', 'items.product.designTemplate', 'items.variant']);
             if ($cart->items->isEmpty()) {
                 throw ValidationException::withMessages(['cart' => 'Your basket is empty.']);
             }
@@ -46,6 +46,7 @@ class CreateOrderFromCart
                 if (! $session || $session->status !== ArtworkSessionStatus::Approved ||
                     $session->approved_generation_asset_id !== $item->generation_asset_id ||
                     $session->approvedAsset?->generation?->status !== GenerationStatus::Succeeded ||
+                    ($item->product->designTemplate && ($session->approved_composed_design_id !== $item->composed_design_id || ! $session->approvedComposedDesign)) ||
                     ! $item->product?->is_active || ! $item->variant?->is_active) {
                     throw ValidationException::withMessages(['cart' => 'One of your basket items is no longer available.']);
                 }
@@ -66,11 +67,11 @@ class CreateOrderFromCart
             foreach ($cart->items as $item) {
                 $order->items()->create([
                     'artwork_session_id' => $item->artwork_session_id, 'generation_id' => $item->generation_id,
-                    'generation_asset_id' => $item->generation_asset_id, 'product_id' => $item->product_id,
+                    'generation_asset_id' => $item->generation_asset_id, 'composed_design_id' => $item->composed_design_id, 'product_id' => $item->product_id,
                     'product_variant_id' => $item->product_variant_id, 'product_name' => $item->product_name,
                     'variant_name' => $item->variant_name, 'artwork_style_name' => $item->artwork_style_name,
                     'sku' => $item->variant->sku, 'personalisation' => $item->personalisation,
-                    'artwork_snapshot' => ['generation_asset_id' => $item->generation_asset_id],
+                    'artwork_snapshot' => ['generation_asset_id' => $item->generation_asset_id, 'composed_design_id' => $item->composed_design_id],
                     'quantity' => $item->quantity, 'unit_price_minor' => $item->unit_price_minor,
                     'total_price_minor' => $item->lineTotalMinor(), 'currency' => $item->currency,
                 ]);
