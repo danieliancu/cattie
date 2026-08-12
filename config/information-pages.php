@@ -69,6 +69,17 @@ return [
             ['Contact', ['Privacy questions and rights requests can be sent to support@cattie.uk. We may need to verify your identity before completing a request.']],
         ],
     ],
+    'manage-cookies' => [
+        'title' => 'Manage Cookies',
+        'description' => 'Information about the cookies Cattie.uk uses and the choices available to you.',
+        'sections' => [
+            ['What cookies are', ['Cookies are small text files stored by your browser. They help websites remember information between page requests and provide secure, consistent functionality.']],
+            ['Necessary cookies', ['Cattie.uk uses necessary cookies for essential features such as secure sessions, artwork personalisation and your basket. These cookies cannot be switched off through the website because the service may not work correctly without them.']],
+            ['Optional cookies', ['If analytics, advertising or preference cookies are introduced, they will be described clearly and will not be enabled without the choice or consent required by applicable law.']],
+            ['Your browser settings', ['You can view, block or delete cookies using your browser settings. Blocking necessary cookies may prevent personalisation, basket and checkout features from working correctly.']],
+            ['Questions', ['For questions about cookies or personal information, email support@cattie.uk or read our Privacy Policy.']],
+        ],
+    ],
     'payment-methods' => [
         'title' => 'Payment Methods',
         'description' => 'Information about checkout, currency, payment security and failed payments.',

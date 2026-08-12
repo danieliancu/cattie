@@ -12,6 +12,11 @@ class ProductImage extends Model
 
     protected $guarded = [];
 
+    protected function casts(): array
+    {
+        return ['is_primary' => 'boolean', 'is_active' => 'boolean'];
+    }
+
     public function product()
     {
         return $this->belongsTo(Product::class);

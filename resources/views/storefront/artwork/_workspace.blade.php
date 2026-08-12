@@ -10,10 +10,10 @@
                 <p class="mt-4 text-muted">Use a clear photo where the face is easy to see.</p>
                 <form action="{{ route('artwork.upload', $session->public_id) }}" method="POST" enctype="multipart/form-data" class="mt-10">
                     @csrf
-                    <label class="flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-coral/50 bg-white p-8">
+                    <label class="relative flex min-h-72 w-full min-w-0 max-w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[2rem] border-2 border-dashed border-coral/50 bg-white p-8">
                         <span class="font-display text-3xl">Choose a favourite photo</span>
                         <span class="mt-3 text-sm text-muted">JPEG, PNG or WebP · up to 10 MB</span>
-                        <input class="mt-6 block max-w-full" type="file" name="photo" accept="image/jpeg,image/png,image/webp" required>
+                        <input class="absolute inset-0 h-full w-full cursor-pointer opacity-0" type="file" name="photo" accept="image/jpeg,image/png,image/webp" required>
                     </label>
                     @error('photo')<p class="mt-3 text-red-700">{{ $message }}</p>@enderror
                     <button class="button-primary mt-7 w-full">Create my artwork →</button>

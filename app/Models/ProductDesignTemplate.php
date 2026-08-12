@@ -14,7 +14,7 @@ class ProductDesignTemplate extends Model
 
     protected function casts(): array
     {
-        return ['version' => 'integer'];
+        return ['version' => 'integer', 'is_active' => 'boolean'];
     }
 
     public function products()
@@ -25,6 +25,11 @@ class ProductDesignTemplate extends Model
     public function composedDesigns()
     {
         return $this->hasMany(ComposedDesign::class);
+    }
+
+    public function versions()
+    {
+        return $this->hasMany(DesignTemplateVersion::class);
     }
 
     public function definition(): array

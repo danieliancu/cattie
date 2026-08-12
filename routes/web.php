@@ -7,12 +7,14 @@ use App\Http\Controllers\Storefront\HomeController;
 use App\Http\Controllers\Storefront\InformationPageController;
 use App\Http\Controllers\Storefront\ProductCategoryController;
 use App\Http\Controllers\Storefront\ProductController;
+use App\Http\Controllers\Storefront\ProductPreviewController;
 use App\Http\Controllers\Storefront\SitemapController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');
 Route::get('/products/{slug}', [ProductController::class, 'show'])->name('products.show');
+Route::get('/admin-preview/products/{product}', ProductPreviewController::class)->name('admin.products.preview');
 Route::get('/collections/{category:slug}', [ProductCategoryController::class, 'show'])->name('categories.show');
 Route::get('/sitemap', [SitemapController::class, 'index'])->name('sitemap');
 Route::get('/sitemap.xml', [SitemapController::class, 'xml'])->name('sitemap.xml');
@@ -21,6 +23,7 @@ Route::get('/faq', InformationPageController::class)->defaults('page', 'faq')->n
 Route::get('/delivery-shipping', InformationPageController::class)->defaults('page', 'delivery-shipping')->name('information.delivery');
 Route::get('/returns-policy', InformationPageController::class)->defaults('page', 'returns-policy')->name('information.returns');
 Route::get('/privacy-policy', InformationPageController::class)->defaults('page', 'privacy-policy')->name('information.privacy');
+Route::get('/manage-cookies', InformationPageController::class)->defaults('page', 'manage-cookies')->name('information.cookies');
 Route::get('/payment-methods', InformationPageController::class)->defaults('page', 'payment-methods')->name('information.payments');
 Route::post('/products/{product:slug}/artwork', [ArtworkController::class, 'start'])->middleware('throttle:10,1')->name('artwork.start');
 Route::get('/artwork/{publicId}', [ArtworkController::class, 'show'])->name('artwork.show');

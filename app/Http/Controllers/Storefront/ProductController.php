@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Domain\Artwork\Actions\ResolveResumableArtworkSession;
+use App\Enums\ProductStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\ProductSlugRedirect;
 use App\Support\CanonicalUrl;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\View\View;
@@ -40,7 +43,7 @@ class ProductController extends Controller
         return view('storefront.products.index', compact('products', 'search', 'categories', 'canonical', 'robots'));
     }
 
-    public function show(string $slug, Request $request, ResolveResumableArtworkSession $resolve): Response
+    public function show(string $slug, Request $request, ResolveResumableArtworkSession $resolve): Response|RedirectResponse
     {
         $product = Product::query()->active()->where('slug', $slug)
             ->with([
@@ -51,7 +54,13 @@ class ProductController extends Controller
                 'recommendedArtworkStyle',
                 'personalisationFields',
                 'categories' => fn ($query) => $query->active(),
-            ])->firstOrFail();
+            ])->first();
+        if (! $product) {
+            $redirect = ProductSlugRedirect::with('product')->where('old_slug', $slug)->first();
+            abort_unless($redirect?->product?->status === ProductStatus::Published, 404);
+
+            return redirect()->route('products.show', $redirect->product->slug, 301);
+        }
 
         $recommendedStyle = $product->artworkStyles->firstWhere('id', $product->recommended_artwork_style_id)
             ?? $product->artworkStyles->first();

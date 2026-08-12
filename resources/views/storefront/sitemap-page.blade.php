@@ -35,6 +35,7 @@
                     <li><a class="hover:text-coral" href="{{ route('information.delivery') }}">Delivery &amp; Shipping</a></li>
                     <li><a class="hover:text-coral" href="{{ route('information.returns') }}">Returns Policy</a></li>
                     <li><a class="hover:text-coral" href="{{ route('information.privacy') }}">Privacy Policy</a></li>
+                    <li><a class="hover:text-coral" href="{{ route('information.cookies') }}">Manage Cookies</a></li>
                     <li><a class="hover:text-coral" href="{{ route('information.payments') }}">Payment Methods</a></li>
                     <li><a class="hover:text-coral" href="{{ route('information.terms') }}">Terms and Conditions</a></li>
                 </ul>

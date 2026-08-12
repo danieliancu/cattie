@@ -19,14 +19,12 @@
 <div class="mt-10 border-t border-rose/25 pt-8">
     <h2 class="font-display text-2xl">Shipping &amp; Returns</h2>
 
-    <div class="mt-8">
-        <h3 class="text-sm font-bold leading-tight">Personalised Item Returns</h3>
+    <div>
         <p class="mt-4 leading-7 text-muted">{{ $policy['returns_summary'] }}</p>
         <a class="mt-4 inline-block font-semibold text-coral underline decoration-coral/40 underline-offset-4" href="{{ route('information.returns') }}">Read our full Returns Policy</a>
     </div>
 
     <div class="mt-8">
-        <h3 class="text-sm font-bold leading-tight">Delivery</h3>
         @include('storefront.information._delivery-table', ['productionHeading' => $policy['production_heading'], 'productionMessage' => $policy['production_message'], 'methods' => $policy['delivery_methods'], 'disclaimer' => $policy['delivery_disclaimer']])
     </div>
 </div>

@@ -14,7 +14,7 @@ class FulfilmentProductMapping extends Model
 
     protected function casts(): array
     {
-        return ['configuration' => 'array', 'is_active' => 'boolean'];
+        return ['configuration' => 'array', 'is_active' => 'boolean', 'last_synced_at' => 'datetime'];
     }
 
     public function variant()

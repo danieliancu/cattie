@@ -7,7 +7,7 @@
                 <div class="mt-4 flex flex-wrap gap-3">@foreach($categories as $category)<a href="{{ route('categories.show', $category) }}" class="rounded-full border border-rose/30 bg-white px-5 py-2.5 text-sm font-bold transition hover:border-coral hover:text-coral">{{ $category->name }}</a>@endforeach</div>
             </nav>
         @endif
-        <div class="mt-14 grid gap-x-8 gap-y-14 sm:grid-cols-2 lg:grid-cols-3">@forelse($products as $product)<x-product-card :product="$product" />@empty<p>No gifts are available just now. Please check back soon.</p>@endforelse</div>
+        <div class="mt-14 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-8 sm:gap-y-14 lg:grid-cols-3">@forelse($products as $product)<x-product-card :product="$product" />@empty<p>No gifts are available just now. Please check back soon.</p>@endforelse</div>
         @if($products->hasPages())<div class="mt-16">{{ $products->links() }}</div>@endif
     </section>
 </x-layouts.storefront>

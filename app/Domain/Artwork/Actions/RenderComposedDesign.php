@@ -13,17 +13,20 @@ use Throwable;
 
 class RenderComposedDesign
 {
+    public function __construct(private ResolveDesignTemplateVersion $resolveTemplateVersion) {}
+
     private const PREVIEW_MAX_EDGE = 1200;
 
     public function handle(ArtworkSession $session, GenerationAsset $asset, array $characterAdjustments = []): ComposedDesign
     {
         $session->loadMissing(['product.designTemplate', 'variant']);
-        $template = $session->product?->designTemplate;
+        $templateVersion = $session->product && $session->variant ? $this->resolveTemplateVersion->handle($session->product, $session->variant) : null;
+        $template = $templateVersion?->template ?? $session->product?->designTemplate;
         if (! $template || ! $session->variant || $asset->generation?->artwork_session_id !== $session->id) {
             throw new RuntimeException('The design inputs are incomplete.');
         }
 
-        $definition = $template->definition();
+        $definition = $templateVersion?->configuration ?? $template->definition();
         $printArea = $definition['output_size']['print_area'] ?? 'default';
         $size = $session->variant->requiredPrintResolution($printArea);
         $personalisation = collect($session->personalisation_snapshot)->keyBy('key');
@@ -90,7 +93,8 @@ class RenderComposedDesign
                 'product_variant_id' => $session->product_variant_id,
                 'generation_asset_id' => $asset->id,
                 'product_design_template_id' => $template->id,
-                'template_version' => $template->version,
+                'design_template_version_id' => $templateVersion?->id,
+                'template_version' => $templateVersion?->version ?? $template->version,
                 'personalisation_snapshot' => $session->personalisation_snapshot,
                 'character_adjustments' => $characterAdjustments,
                 'width' => $size['width'], 'height' => $size['height'], 'format' => 'png',
@@ -142,7 +146,7 @@ class RenderComposedDesign
         ];
     }
 
-    private function renderSolid(\GdImage $canvas, array $layer, array $variantOptions): void
+    public function renderSolid(\GdImage $canvas, array $layer, array $variantOptions): void
     {
         $colour = $layer['colour'] ?? null;
         if ($option = $layer['variant_option'] ?? null) {
@@ -152,7 +156,7 @@ class RenderComposedDesign
         imagefill($canvas, 0, 0, $this->colour($canvas, $colour ?? '#ffffff'));
     }
 
-    private function renderTransparent(\GdImage $canvas): void
+    public function renderTransparent(\GdImage $canvas): void
     {
         imagealphablending($canvas, false);
         imagefill($canvas, 0, 0, imagecolorallocatealpha($canvas, 0, 0, 0, 127));
@@ -160,7 +164,7 @@ class RenderComposedDesign
         imagealphablending($canvas, true);
     }
 
-    private function renderTextPattern(\GdImage $canvas, array $layer, array $definition, array $personalisation, ProductDesignTemplate $template, array $variantOptions): void
+    public function renderTextPattern(\GdImage $canvas, array $layer, array $definition, array $personalisation, ProductDesignTemplate $template, array $variantOptions): void
     {
         $textValue = trim((string) ($personalisation[$layer['field'] ?? '']['value'] ?? ''));
         if ($textValue === '') {
@@ -317,7 +321,7 @@ class RenderComposedDesign
         }
     }
 
-    private function renderGenerationAsset(\GdImage $canvas, \GdImage $source, array $layer, array $config, array $adjustments = []): void
+    public function renderGenerationAsset(\GdImage $canvas, \GdImage $source, array $layer, array $config, array $adjustments = []): void
     {
         if (($layer['fit'] ?? null) !== 'contain') {
             throw new RuntimeException('Generation artwork must use contain fitting.');
@@ -385,7 +389,7 @@ class RenderComposedDesign
         return $result;
     }
 
-    private function previewBytes(\GdImage $canvas): string
+    public function previewBytes(\GdImage $canvas): string
     {
         $scale = min(1, self::PREVIEW_MAX_EDGE / max(imagesx($canvas), imagesy($canvas)));
         $width = max(1, (int) round(imagesx($canvas) * $scale));

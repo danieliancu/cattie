@@ -18,7 +18,7 @@ class ProductVariant extends Model
 
     protected function casts(): array
     {
-        return ['options' => 'array', 'is_active' => 'boolean'];
+        return ['options' => 'array', 'is_active' => 'boolean', 'is_default' => 'boolean'];
     }
 
     public function product()
@@ -29,6 +29,16 @@ class ProductVariant extends Model
     public function fulfilmentMappings()
     {
         return $this->hasMany(FulfilmentProductMapping::class);
+    }
+
+    public function designTemplateAssignments()
+    {
+        return $this->hasMany(DesignTemplateAssignment::class, 'product_variant_id');
+    }
+
+    public function images()
+    {
+        return $this->hasMany(ProductImage::class);
     }
 
     public function scopeActive(Builder $query): Builder
@@ -43,7 +53,7 @@ class ProductVariant extends Model
 
     public function formattedPrice(): string
     {
-        return Money::format($this->price_minor, $this->currency);
+        return Money::format($this->price_override_minor ?? $this->price_minor, $this->currency);
     }
 
     /** @return array{width: int, height: int} */

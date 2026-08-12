@@ -24,7 +24,7 @@ class SitemapController extends Controller
         $products = Product::query()->active()->ordered()->get();
         $staticUrls = [
             route('home'), route('products.index'), route('sitemap'), route('information.terms'), route('information.faq'),
-            route('information.delivery'), route('information.returns'), route('information.privacy'), route('information.payments'),
+            route('information.delivery'), route('information.returns'), route('information.privacy'), route('information.cookies'), route('information.payments'),
         ];
 
         return response()

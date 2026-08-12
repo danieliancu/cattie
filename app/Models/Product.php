@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ProductStatus;
 use App\Models\Concerns\UsesUlids;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,7 +19,7 @@ class Product extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean', 'artwork_requirements' => 'array', 'preview_configuration' => 'array'];
+        return ['is_active' => 'boolean', 'status' => ProductStatus::class, 'artwork_requirements' => 'array', 'preview_configuration' => 'array'];
     }
 
     public function variants()
@@ -60,9 +61,24 @@ class Product extends Model
         return $this->belongsTo(ProductDesignTemplate::class, 'product_design_template_id');
     }
 
+    public function defaultVariant()
+    {
+        return $this->belongsTo(ProductVariant::class, 'default_variant_id');
+    }
+
+    public function designTemplateAssignments()
+    {
+        return $this->hasMany(DesignTemplateAssignment::class);
+    }
+
+    public function slugRedirects()
+    {
+        return $this->hasMany(ProductSlugRedirect::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
-        return $query->where('is_active', true);
+        return $query->where('status', ProductStatus::Published->value)->where('is_active', true);
     }
 
     public function scopeOrdered(Builder $query): Builder
@@ -74,7 +90,7 @@ class Product extends Model
     {
         $variants = $this->relationLoaded('variants') ? $this->variants : $this->variants()->where('is_active', true)->get();
 
-        return $variants->where('is_active', true)->min('price_minor') ?? $this->base_price_minor;
+        return $variants->where('is_active', true)->map(fn ($variant) => $variant->price_override_minor ?? $variant->price_minor)->min() ?? $this->default_price_minor ?? $this->base_price_minor;
     }
 
     public function formattedPrice(): string
@@ -84,7 +100,7 @@ class Product extends Model
 
     public function primaryImage(): ?ProductImage
     {
-        return $this->relationLoaded('images') ? $this->images->first() : $this->images()->first();
+        return $this->relationLoaded('images') ? $this->images->where('is_active', true)->sortByDesc('is_primary')->first() : $this->images()->where('is_active', true)->orderByDesc('is_primary')->first();
     }
 
     public function usesStaticMockupBoundary(): bool

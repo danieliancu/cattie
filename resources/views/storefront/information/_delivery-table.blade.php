@@ -1,11 +1,10 @@
 <div class="mt-5">
     <div class="flex items-center gap-3">
-        <i data-lucide="map" class="h-6 w-6 shrink-0 text-coral" stroke-width="1.5" aria-hidden="true"></i>
-        <h3 class="font-display text-xl">{{ $productionHeading }}</h3>
+        <h3 class="font-display text-2xl">{{ $productionHeading }}</h3>
     </div>
     <p class="mt-2 leading-7 text-muted">{{ $productionMessage }}</p>
 </div>
-<div class="mt-5 overflow-x-auto rounded-2xl border border-rose/25">
+<div class="mt-5 max-w-full overflow-x-auto rounded-2xl border border-rose/25">
     <table class="min-w-full border-collapse text-left text-sm">
         <caption class="sr-only">Estimated total United Kingdom delivery times and prices</caption>
         <thead class="bg-sand text-ink">

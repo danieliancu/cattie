@@ -46,4 +46,9 @@ class ComposedDesign extends Model
     {
         return $this->belongsTo(ProductDesignTemplate::class, 'product_design_template_id');
     }
+
+    public function designTemplateVersion()
+    {
+        return $this->belongsTo(DesignTemplateVersion::class);
+    }
 }

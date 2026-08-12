@@ -9,7 +9,10 @@ use App\Domain\Payments\Contracts\ShippingResolver;
 use App\Domain\Payments\Contracts\TaxResolver;
 use App\Domain\Payments\Resolvers\FreeUkShippingResolver;
 use App\Domain\Payments\Resolvers\ZeroUkTaxResolver;
+use App\Models\FulfilmentProductMapping;
 use App\Models\Product;
+use App\Observers\FulfilmentProductMappingObserver;
+use App\Observers\ProductObserver;
 use App\Providers\ImageGeneration\FakeImageGenerationProvider;
 use App\Providers\ImageGeneration\OpenAiImageGenerationProvider;
 use App\Providers\Payments\FakePaymentProvider;
@@ -43,6 +46,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Product::observe(ProductObserver::class);
+        FulfilmentProductMapping::observe(FulfilmentProductMappingObserver::class);
         View::composer('layouts.storefront', function ($view) {
             [$cart] = app(ResolveGuestCart::class)->handle(request(), false);
             $view->with([

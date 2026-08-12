@@ -6,13 +6,13 @@
     <title>{{ $title ?? 'Cattie.uk — Personalised gifts made magical' }}</title>
     <meta name="description" content="{{ $description ?? 'Turn a favourite photo into heartfelt personalised artwork and gifts.' }}">
     @isset($robots)<meta name="robots" content="{{ $robots }}">@endisset
-    <link rel="canonical" href="{{ $canonical ?? url()->current() }}">
+    @unless(($robots ?? null) === 'noindex,nofollow')<link rel="canonical" href="{{ $canonical ?? url()->current() }}">@endunless
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=dm-sans:400,500,600,700|fraunces:500,600,700" rel="stylesheet" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="bg-white text-ink antialiased">
+<body class="overflow-x-clip bg-white text-ink antialiased">
 <a href="#main-content" class="skip-link">Skip to content</a>
 <header class="sticky top-0 z-40 border-b border-rose/20 bg-cream/95 backdrop-blur" x-data="{mobileMenu:false,mobileAccountOpen:false,desktopAccountOpen:false,searchOpen:false,searchQuery:@js((string) request('q', '')),searchProducts:@js($searchProducts),filteredProducts(){const query=this.searchQuery.trim().toLowerCase();return query===''?this.searchProducts:this.searchProducts.filter(product=>product.name.toLowerCase().includes(query))}}">
     <div class="shell py-4 lg:grid lg:grid-cols-[auto_minmax(240px,1fr)_auto] lg:items-center lg:gap-8">
@@ -89,9 +89,9 @@
         </div>
     </div>
     <div class="border-t border-rose/20">
-        <div class="shell flex items-center justify-center gap-6 py-4 text-[10px] text-muted sm:gap-12 sm:text-xs lg:gap-20">
+        <div class="shell flex flex-col items-center justify-center gap-3 py-4 text-[10px] text-muted sm:flex-row sm:gap-12 sm:text-xs lg:gap-20">
             <span class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap"><svg viewBox="0 0 60 30" class="h-3.5 w-7" role="img" aria-label="United Kingdom flag"><clipPath id="uk-flag-clip"><rect width="60" height="30" rx="1"/></clipPath><g clip-path="url(#uk-flag-clip)"><path fill="#012169" d="M0 0h60v30H0z"/><path stroke="#fff" stroke-width="6" d="m0 0 60 30m0-30L0 30"/><path stroke="#C8102E" stroke-width="2" d="m0 0 60 30m0-30L0 30"/><path stroke="#fff" stroke-width="10" d="M30 0v30M0 15h60"/><path stroke="#C8102E" stroke-width="6" d="M30 0v30M0 15h60"/></g></svg> United Kingdom</span>
-            <span class="shrink-0 whitespace-nowrap">Manage Cookies</span>
+            <a class="shrink-0 whitespace-nowrap hover:text-coral" href="{{ route('information.cookies') }}">Manage Cookies</a>
             <span class="shrink-0 whitespace-nowrap">Copyright © 2026, CATTIE All Rights Reserved</span>
         </div>
     </div>

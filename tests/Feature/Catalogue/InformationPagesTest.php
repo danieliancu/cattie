@@ -18,6 +18,7 @@ class InformationPagesTest extends TestCase
             'information.delivery' => ['Delivery &amp; Shipping', 'Production'],
             'information.returns' => ['Returns Policy', 'Personalised Products'],
             'information.privacy' => ['Privacy Policy', 'Photographs and AI artwork'],
+            'information.cookies' => ['Manage Cookies', 'Necessary cookies'],
             'information.payments' => ['Payment Methods', 'Available payment methods'],
         ];
 
@@ -31,7 +32,7 @@ class InformationPagesTest extends TestCase
     public function test_delivery_policy_has_production_time_and_accessible_uk_estimates(): void
     {
         $this->get(route('information.delivery'))->assertOk()
-            ->assertSee('Made and printed in the UK')->assertSee('data-lucide="map"', false)
+            ->assertSee('Made and printed in the UK')
             ->assertSee('Your personalised gift is made to order, usually within 3–5 working days.')
             ->assertSee('Price')->assertSee('Estimated delivery')->assertSee('Delivery method')
             ->assertSee('£3.50')->assertSee('5–8 business days')->assertSee('Royal Mail 48 Tracked')
@@ -63,7 +64,7 @@ class InformationPagesTest extends TestCase
         $product = Product::query()->active()->where('slug', 'water-bottle-with-red-flip-lid')->firstOrFail();
 
         $this->get(route('products.show', $product->slug))->assertOk()
-            ->assertSee('Made')->assertSee('For You')->assertSee('Personalised Item Returns')
+            ->assertSee('Made')->assertSee('For You')
             ->assertSee('cannot normally accept returns or exchanges if you simply change your mind')
             ->assertSee('damaged, defective, incorrect, or is not as described')
             ->assertSee('This does not affect your statutory rights.')
@@ -80,7 +81,7 @@ class InformationPagesTest extends TestCase
     {
         $response = $this->get(route('home'))->assertOk();
 
-        foreach (['information.terms', 'information.faq', 'information.delivery', 'information.returns', 'information.privacy', 'information.payments'] as $route) {
+        foreach (['information.terms', 'information.faq', 'information.delivery', 'information.returns', 'information.privacy', 'information.cookies', 'information.payments'] as $route) {
             $response->assertSee('href="'.route($route).'"', false);
         }
     }

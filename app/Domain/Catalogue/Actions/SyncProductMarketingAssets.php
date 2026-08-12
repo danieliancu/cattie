@@ -60,7 +60,10 @@ class SyncProductMarketingAssets
                 continue;
             }
 
-            $primaryCandidates = $files->filter(fn (string $name) => preg_match('/(?:^|[-_])(product|primary|hero)(?:[-_.]|$)/i', pathinfo($name, PATHINFO_FILENAME)) === 1)->values();
+            $primaryCandidates = $files
+                ->filter(fn (string $name) => preg_match('/(?:^|[-_])(product|primary|hero)(?:[-_.]|$)/i', pathinfo($name, PATHINFO_FILENAME)) === 1)
+                ->sortBy(fn (string $name) => sprintf('%06d:%s', mb_strlen(pathinfo($name, PATHINFO_FILENAME)), mb_strtolower($name)))
+                ->values();
             if ($primaryCandidates->count() > 1) {
                 Log::warning('Multiple marketing images claim primary role; using the first deterministic candidate.', [
                     'product_id' => $product->id, 'variant_id' => $variant->id, 'files' => $primaryCandidates->all(),
