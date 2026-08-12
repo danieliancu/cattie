@@ -6,6 +6,7 @@ use App\Enums\ComposedDesignStatus;
 use App\Models\ArtworkSession;
 use App\Models\ComposedDesign;
 use App\Models\GenerationAsset;
+use App\Models\ProductDesignTemplate;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Throwable;
@@ -47,7 +48,7 @@ class RenderComposedDesign
                 }
                 match ($layer['type'] ?? null) {
                     'solid' => $this->renderSolid($canvas, $layer, $session->variant->options ?? []),
-                    'personalisation_text_pattern' => $this->renderTextPattern($canvas, $layer, $definition, $personalisation->all()),
+                    'personalisation_text_pattern' => $this->renderTextPattern($canvas, $layer, $definition, $personalisation->all(), $template),
                     'generation_asset' => $this->renderGenerationAsset($canvas, $source, $layer, $definition[$layer['config'] ?? ''] ?? [], $characterAdjustments),
                     default => throw new RuntimeException('The design template contains an unsupported layer.'),
                 };
@@ -146,7 +147,7 @@ class RenderComposedDesign
         imagefill($canvas, 0, 0, $this->colour($canvas, $colour ?? '#ffffff'));
     }
 
-    private function renderTextPattern(\GdImage $canvas, array $layer, array $definition, array $personalisation): void
+    private function renderTextPattern(\GdImage $canvas, array $layer, array $definition, array $personalisation, ProductDesignTemplate $template): void
     {
         $value = trim((string) ($personalisation[$layer['field'] ?? '']['value'] ?? ''));
         if ($value === '') {
@@ -163,29 +164,136 @@ class RenderComposedDesign
             throw new RuntimeException('The text pattern configuration is invalid.');
         }
         $colour = $this->colour($canvas, $layer['colour'] ?? '#ffffff');
+        usort($items, fn (array $left, array $right): int => ((float) ($right['size'] ?? 0)) <=> ((float) ($left['size'] ?? 0)));
+        $occupied = [];
+        $collisionPadding = max(2, (int) round(min(imagesx($canvas), imagesy($canvas)) * .006));
         imagesetclip($canvas, $rect['x'], $rect['y'], $rect['x'] + $rect['width'], $rect['y'] + $rect['height']);
         foreach ($items as $item) {
             $style = $styles[$item['style'] ?? ''] ?? null;
             if (! is_array($style)) {
                 throw new RuntimeException('The text pattern references an invalid style.');
             }
-            $font = $this->fontPath((string) ($style['font_family'] ?? 'serif'));
-            $fontSize = max(18, (int) round(min(imagesx($canvas), imagesy($canvas)) * (float) ($item['size'] ?? .04)));
+            $font = $this->fontPathFromStyle($template, $style);
             $rotation = (float) ($item['rotation'] ?? 0);
-            $text = ($style['uppercase'] ?? false) ? mb_strtoupper($value) : $value;
-            $bounds = imagettfbbox($fontSize, $rotation, $font, $text);
-            if ($bounds === false) {
-                throw new RuntimeException('The personalised text could not be measured.');
+            if (! in_array($rotation, [0.0, 90.0], true)) {
+                throw new RuntimeException('Design text rotation must be either 0 or 90 degrees.');
             }
-            $textWidth = max($bounds[0], $bounds[2], $bounds[4], $bounds[6]) - min($bounds[0], $bounds[2], $bounds[4], $bounds[6]);
-            $textHeight = max($bounds[1], $bounds[3], $bounds[5], $bounds[7]) - min($bounds[1], $bounds[3], $bounds[5], $bounds[7]);
+            $letterSpacing = $style['letter_spacing'] ?? 0;
+            if (! is_numeric($letterSpacing) || (float) $letterSpacing < 0 || (float) $letterSpacing > 1) {
+                throw new RuntimeException('Design letter spacing must be between 0 and 1 em.');
+            }
+            $text = ($style['uppercase'] ?? false) ? mb_strtoupper($value) : $value;
             $centreX = $rect['x'] + ((float) ($item['x'] ?? 0) * $rect['width']);
             $centreY = $rect['y'] + ((float) ($item['y'] ?? 0) * $rect['height']);
-            $x = (int) round($centreX - ($textWidth / 2) - min($bounds[0], $bounds[2], $bounds[4], $bounds[6]));
-            $y = (int) round($centreY - ($textHeight / 2) - min($bounds[1], $bounds[3], $bounds[5], $bounds[7]));
-            imagettftext($canvas, $fontSize, $rotation, $x, $y, $colour, $font, $text);
+            $fontSize = max(18, (int) round(min(imagesx($canvas), imagesy($canvas)) * (float) ($item['size'] ?? .04)));
+            $placement = null;
+
+            while ($fontSize >= 18) {
+                $candidate = $this->textPlacement($fontSize, $rotation, $font, $text, (float) $letterSpacing, $centreX, $centreY);
+                $visible = $this->intersectingRect($candidate['rect'], $rect);
+                $overlaps = $visible === null || collect($occupied)->contains(
+                    fn (array $used): bool => $this->rectanglesOverlap($visible, $used, $collisionPadding)
+                );
+
+                if (! $overlaps) {
+                    $placement = $candidate;
+                    $occupied[] = $visible;
+                    break;
+                }
+
+                $fontSize = (int) floor($fontSize * .92);
+            }
+
+            if ($placement === null) {
+                continue;
+            }
+
+            $this->drawText($canvas, $fontSize, $rotation, $placement['x'], $placement['y'], $colour, $font, $text, (float) $letterSpacing);
         }
         imagesetclip($canvas, 0, 0, imagesx($canvas) - 1, imagesy($canvas) - 1);
+    }
+
+    /** @return array{x:int,y:int,rect:array{x:int,y:int,width:int,height:int}} */
+    private function textPlacement(int $fontSize, float $rotation, string $font, string $text, float $letterSpacing, float $centreX, float $centreY): array
+    {
+        $bounds = imagettfbbox($fontSize, $rotation, $font, $text);
+        if ($bounds === false) {
+            throw new RuntimeException('The personalised text could not be measured.');
+        }
+        $minX = min($bounds[0], $bounds[2], $bounds[4], $bounds[6]);
+        $maxX = max($bounds[0], $bounds[2], $bounds[4], $bounds[6]);
+        $minY = min($bounds[1], $bounds[3], $bounds[5], $bounds[7]);
+        $maxY = max($bounds[1], $bounds[3], $bounds[5], $bounds[7]);
+        $extra = $fontSize * $letterSpacing * max(0, mb_strlen($text) - 1);
+        $width = ($maxX - $minX) + ($rotation === 0.0 ? $extra : 0);
+        $height = ($maxY - $minY) + ($rotation === 90.0 ? $extra : 0);
+
+        return [
+            'x' => (int) round($centreX - (($maxX - $minX) / 2) - $minX),
+            'y' => (int) round($centreY - (($maxY - $minY) / 2) - $minY),
+            'rect' => [
+                'x' => (int) floor($centreX - ($width / 2)),
+                'y' => (int) floor($centreY - ($height / 2)),
+                'width' => max(1, (int) ceil($width)),
+                'height' => max(1, (int) ceil($height)),
+            ],
+        ];
+    }
+
+    /** @return array{x:int,y:int,width:int,height:int}|null */
+    private function intersectingRect(array $candidate, array $bounds): ?array
+    {
+        $left = max($candidate['x'], $bounds['x']);
+        $top = max($candidate['y'], $bounds['y']);
+        $right = min($candidate['x'] + $candidate['width'], $bounds['x'] + $bounds['width']);
+        $bottom = min($candidate['y'] + $candidate['height'], $bounds['y'] + $bounds['height']);
+
+        return $right <= $left || $bottom <= $top
+            ? null
+            : ['x' => $left, 'y' => $top, 'width' => $right - $left, 'height' => $bottom - $top];
+    }
+
+    private function rectanglesOverlap(array $left, array $right, int $padding): bool
+    {
+        return $left['x'] < $right['x'] + $right['width'] + $padding
+            && $right['x'] < $left['x'] + $left['width'] + $padding
+            && $left['y'] < $right['y'] + $right['height'] + $padding
+            && $right['y'] < $left['y'] + $left['height'] + $padding;
+    }
+
+    private function drawText(\GdImage $canvas, int $fontSize, float $rotation, int $x, int $y, int $colour, string $font, string $text, float $letterSpacing): void
+    {
+        if ($letterSpacing === 0.0 || mb_strlen($text) < 2) {
+            imagettftext($canvas, $fontSize, $rotation, $x, $y, $colour, $font, $text);
+
+            return;
+        }
+
+        $characters = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
+        if ($characters === false) {
+            throw new RuntimeException('The personalised text contains invalid Unicode.');
+        }
+        $spacing = $fontSize * $letterSpacing;
+        $radians = deg2rad($rotation);
+        $directionX = cos($radians);
+        $directionY = -sin($radians);
+        $extraWidth = $spacing * max(0, count($characters) - 1);
+        $cursorX = $x - ($directionX * $extraWidth / 2);
+        $cursorY = $y - ($directionY * $extraWidth / 2);
+
+        foreach ($characters as $index => $character) {
+            imagettftext($canvas, $fontSize, $rotation, (int) round($cursorX), (int) round($cursorY), $colour, $font, $character);
+            $bounds = imagettfbbox($fontSize, 0, $font, $character);
+            if ($bounds === false) {
+                throw new RuntimeException('A personalised character could not be measured.');
+            }
+            $advance = max($bounds[0], $bounds[2], $bounds[4], $bounds[6]) - min($bounds[0], $bounds[2], $bounds[4], $bounds[6]);
+            if ($index < count($characters) - 1) {
+                $advance += $spacing;
+            }
+            $cursorX += $directionX * $advance;
+            $cursorY += $directionY * $advance;
+        }
     }
 
     private function renderGenerationAsset(\GdImage $canvas, \GdImage $source, array $layer, array $config, array $adjustments = []): void
@@ -194,7 +302,8 @@ class RenderComposedDesign
             throw new RuntimeException('Generation artwork must use contain fitting.');
         }
         $rect = $this->characterBox($config, imagesx($canvas), imagesy($canvas));
-        $contained = $this->containedSize(imagesx($source), imagesy($source), $rect['width'], $rect['height']);
+        $sourceRect = $this->opaqueBounds($source);
+        $contained = $this->containedSize($sourceRect['width'], $sourceRect['height'], $rect['width'], $rect['height']);
         $scale = max(.6, min(1.8, (float) ($adjustments['scale'] ?? 1)));
         $width = max(1, (int) round($contained['width'] * $scale));
         $height = max(1, (int) round($contained['height'] * $scale));
@@ -204,8 +313,55 @@ class RenderComposedDesign
         $y = $rect['y'] + (int) round(($rect['height'] - $height) / 2 + $offsetY);
         imagesetclip($canvas, $rect['x'], $rect['y'], $rect['x'] + $rect['width'] - 1, $rect['y'] + $rect['height'] - 1);
         imagealphablending($canvas, true);
-        imagecopyresampled($canvas, $source, $x, $y, 0, 0, $width, $height, imagesx($source), imagesy($source));
+        imagecopyresampled($canvas, $source, $x, $y, $sourceRect['x'], $sourceRect['y'], $width, $height, $sourceRect['width'], $sourceRect['height']);
         imagesetclip($canvas, 0, 0, imagesx($canvas) - 1, imagesy($canvas) - 1);
+    }
+
+    /** @return array{x:int,y:int,width:int,height:int} */
+    private function opaqueBounds(\GdImage $image): array
+    {
+        $width = imagesx($image);
+        $height = imagesy($image);
+        $minX = $width;
+        $minY = $height;
+        $maxX = -1;
+        $maxY = -1;
+
+        for ($y = 0; $y < $height; $y++) {
+            for ($x = 0; $x < $width; $x++) {
+                if (((imagecolorat($image, $x, $y) >> 24) & 0x7F) < 120) {
+                    $minX = min($minX, $x);
+                    $minY = min($minY, $y);
+                    $maxX = max($maxX, $x);
+                    $maxY = max($maxY, $y);
+                }
+            }
+        }
+
+        return $maxX < $minX || $maxY < $minY
+            ? ['x' => 0, 'y' => 0, 'width' => $width, 'height' => $height]
+            : ['x' => $minX, 'y' => $minY, 'width' => $maxX - $minX + 1, 'height' => $maxY - $minY + 1];
+    }
+
+    public function trimTransparentImage(string $bytes): string
+    {
+        $source = @imagecreatefromstring($bytes);
+        if (! $source) {
+            throw new RuntimeException('The generation asset is unreadable.');
+        }
+        $bounds = $this->opaqueBounds($source);
+        $trimmed = imagecreatetruecolor($bounds['width'], $bounds['height']);
+        imagealphablending($trimmed, false);
+        imagesavealpha($trimmed, true);
+        imagefill($trimmed, 0, 0, imagecolorallocatealpha($trimmed, 0, 0, 0, 127));
+        imagecopy($trimmed, $source, 0, 0, $bounds['x'], $bounds['y'], $bounds['width'], $bounds['height']);
+        ob_start();
+        imagepng($trimmed);
+        $result = ob_get_clean();
+        imagedestroy($trimmed);
+        imagedestroy($source);
+
+        return $result;
     }
 
     private function previewBytes(\GdImage $canvas): string
@@ -241,6 +397,44 @@ class RenderComposedDesign
             'serif' => $this->fontPath('serif'),
             'sans-bold' => $this->fontPath('sans-bold'),
         ];
+    }
+
+    /** @return array<string,string> */
+    public function resolvedTemplateFontPaths(ProductDesignTemplate $template): array
+    {
+        $pattern = collect($template->definition()['layers'])->firstWhere('type', 'personalisation_text_pattern');
+
+        return collect($pattern['styles'] ?? [])->mapWithKeys(fn (array $style, string $key) => [
+            $key => $this->fontPathFromStyle($template, $style),
+        ])->all();
+    }
+
+    private function fontPathFromStyle(ProductDesignTemplate $template, array $style): string
+    {
+        if (! isset($style['font_source'])) {
+            return $this->fontPath((string) ($style['font_family'] ?? 'serif'));
+        }
+
+        $family = (string) ($style['font_family'] ?? '');
+        $source = str_replace('\\', '/', (string) $style['font_source']);
+        $weight = $style['font_weight'] ?? null;
+        $allowed = [
+            'Anton' => ['source' => 'assets/fonts/Anton-Regular.ttf', 'weight' => 400],
+            'Bodoni Moda' => ['source' => 'assets/fonts/BodoniModa_18pt-Regular.ttf', 'weight' => 400],
+            'Fredoka' => ['source' => 'assets/fonts/Fredoka-SemiBold.ttf', 'weight' => 600],
+            'Allura' => ['source' => 'assets/fonts/Allura-Regular.ttf', 'weight' => 400],
+        ];
+        if (! isset($allowed[$family]) || $source !== $allowed[$family]['source'] || $weight !== $allowed[$family]['weight']) {
+            throw new RuntimeException("Unsupported design font declaration [{$family}].");
+        }
+
+        $templateRoot = realpath(resource_path('product-designs/'.dirname($template->definition_path)));
+        $path = realpath(($templateRoot ?: '').DIRECTORY_SEPARATOR.str_replace('/', DIRECTORY_SEPARATOR, $source));
+        if (! $templateRoot || ! $path || ! str_starts_with(strtolower($path), strtolower($templateRoot.DIRECTORY_SEPARATOR)) || strtolower(pathinfo($path, PATHINFO_EXTENSION)) !== 'ttf') {
+            throw new RuntimeException("Design font source [{$source}] is unavailable or unsafe.");
+        }
+
+        return $path;
     }
 
     private function fontPath(string $family): string

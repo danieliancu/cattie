@@ -115,10 +115,17 @@ class ArtworkController extends Controller
         }, 'preview_url' => $preview ? route('artwork.assets', [$session->public_id, $preview->id]) : null, 'poll_interval_ms' => config('artwork.poll_interval_ms')]);
     }
 
-    public function asset(string $publicId, GenerationAsset $asset, Request $request)
+    public function asset(string $publicId, GenerationAsset $asset, Request $request, RenderComposedDesign $render)
     {
         $session = $this->owned($publicId, $request);
         abort_unless($asset->generation?->artwork_session_id === $session->id, 404);
+
+        if ($request->boolean('trim')) {
+            return response($render->trimTransparentImage(Storage::disk($asset->disk)->get($asset->storage_key)), 200, [
+                'Content-Type' => 'image/png',
+                'Cache-Control' => 'private, max-age=300',
+            ]);
+        }
 
         return Storage::disk($asset->disk)->response($asset->storage_key, null, ['Cache-Control' => 'private, max-age=300']);
     }

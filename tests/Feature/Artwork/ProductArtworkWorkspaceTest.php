@@ -46,7 +46,7 @@ class ProductArtworkWorkspaceTest extends TestCase
     {
         [$product] = $this->catalogue();
         $template = ProductDesignTemplate::query()->create([
-            'key' => 'bottle-wrap-v1', 'version' => 3,
+            'key' => 'bottle-wrap-v1', 'version' => 4,
             'definition_path' => 'bottle-wrap-v1/template.json',
         ]);
         $product->update(['product_design_template_id' => $template->id]);

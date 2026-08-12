@@ -55,7 +55,7 @@ class CatalogueSeeder extends Seeder
     {
         $designTemplate = ProductDesignTemplate::query()->updateOrCreate(
             ['key' => 'bottle-wrap-v1'],
-            ['version' => 3, 'definition_path' => 'bottle-wrap-v1/template.json'],
+            ['version' => 4, 'definition_path' => 'bottle-wrap-v1/template.json'],
         );
 
         $product = Product::query()->updateOrCreate(

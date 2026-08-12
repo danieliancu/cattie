@@ -16,6 +16,7 @@ use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 use Tests\TestCase;
 
 class ComposedDesignTest extends TestCase
@@ -80,9 +81,14 @@ class ComposedDesignTest extends TestCase
         $product = Product::query()->where('slug', 'cattie-water-bottle')->firstOrFail();
         $definition = $product->designTemplate->definition();
         $pattern = collect($definition['layers'])->firstWhere('type', 'personalisation_text_pattern');
-        $this->assertSame(['bold', 'serif', 'script'], array_keys($pattern['styles']));
-        $this->assertCount(30, $pattern['items']);
+        $this->assertSame(['caps-condensed', 'serif-display', 'rounded-display', 'script-display'], array_keys($pattern['styles']));
+        $this->assertCount(36, $pattern['items']);
         $this->assertContains(90, collect($pattern['items'])->pluck('rotation')->all());
+        $this->assertSame([0, 90], collect($pattern['items'])->pluck('rotation')->unique()->sort()->values()->all());
+        $this->assertSame(0.01, $pattern['styles']['caps-condensed']['letter_spacing']);
+        $this->assertArrayNotHasKey('reference_name_length', $pattern);
+        $this->assertArrayNotHasKey('minimum_name_scale', $pattern);
+        $this->assertArrayNotHasKey('reference_aspect_ratio', $pattern);
         $this->assertSame(['x', 'y', 'scale', 'offset_x', 'offset_y', 'max_width', 'max_height'], array_keys($definition['character']));
 
         $renderer = app(RenderComposedDesign::class);
@@ -114,12 +120,25 @@ class ComposedDesignTest extends TestCase
         [$session, $asset] = $this->inputs('black');
         $session->update(['personalisation_snapshot' => [['key' => 'name', 'label' => 'Name', 'type' => 'text', 'value' => 'María-Andreea Foarte Lung']]]);
         $renderer = app(RenderComposedDesign::class);
-        $fonts = $renderer->resolvedFontPaths();
-        $this->assertSame(['script', 'serif', 'sans-bold'], array_keys($fonts));
-        $this->assertCount(3, array_unique($fonts));
+        $template = $session->product->designTemplate;
+        $fonts = $renderer->resolvedTemplateFontPaths($template);
+        $this->assertSame(['caps-condensed', 'serif-display', 'rounded-display', 'script-display'], array_keys($fonts));
+        $this->assertCount(4, array_unique($fonts));
         foreach ($fonts as $font) {
             $this->assertFileExists($font);
         }
+        $this->expectException(RuntimeException::class);
+        $method = new \ReflectionMethod($renderer, 'fontPathFromStyle');
+        $method->invoke($renderer, $template, ['font_family' => 'Anton', 'font_source' => '../outside.ttf', 'font_weight' => 400]);
+
+        $this->fail('An unsafe font source must be rejected.');
+    }
+
+    public function test_v4_typography_is_offline_deterministic_and_clipped_to_the_safe_zone(): void
+    {
+        [$session, $asset] = $this->inputs('black');
+        $session->update(['personalisation_snapshot' => [['key' => 'name', 'label' => 'Name', 'type' => 'text', 'value' => 'María Rose']]]);
+        $renderer = app(RenderComposedDesign::class);
 
         $first = $renderer->handle($session->fresh(), $asset);
         $second = $renderer->handle($session->fresh(), $asset);

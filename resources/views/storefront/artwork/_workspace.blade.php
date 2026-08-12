@@ -55,7 +55,7 @@
                 'selectedDesignUrl' => $selectedDesign ? route('artwork.designs', [$session->public_id, $selectedDesign]) : null,
                 'selectedLayoutUrl' => $selectedDesign ? route('artwork.design-layout', [$session->public_id, $selectedDesign]) : null,
                 'editorBackgroundUrl' => $selectedDesign?->editor_background_storage_key ? route('artwork.design-editor-background', [$session->public_id, $selectedDesign]) : null,
-                'characterUrl' => $selectedAsset ? route('artwork.assets', [$session->public_id, $selectedAsset]) : null,
+                'characterUrl' => $selectedAsset ? route('artwork.assets', [$session->public_id, $selectedAsset, 'trim' => 1]) : null,
                 'selectedDesignId' => $selectedDesign?->id,
                 'selectedAssetId' => $selectedAsset?->id,
                 'selectedVariantId' => $session->product_variant_id,

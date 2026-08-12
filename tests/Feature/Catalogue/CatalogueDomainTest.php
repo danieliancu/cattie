@@ -92,11 +92,14 @@ class CatalogueDomainTest extends TestCase
         $this->assertNull($unrelated->designTemplate);
 
         $this->assertSame('bottle-wrap-v1', $bottle->designTemplate->key);
+        $this->assertSame(4, $bottle->designTemplate->version);
         $this->assertSame(12, $bottle->personalisationFields()->where('key', 'name')->firstOrFail()->validation_rules['max']);
         $this->assertSame(1, ProductDesignTemplate::query()->count());
         $definition = $bottle->designTemplate->definition();
         $this->assertSame('normalized', $definition['coordinate_system']);
         $this->assertSame('variant_print_area', $definition['output_size']['source']);
+        $this->assertSame('assets/fonts/Anton-Regular.ttf', $definition['layers'][1]['styles']['caps-condensed']['font_source']);
+        $this->assertSame(600, $definition['layers'][1]['styles']['rounded-display']['font_weight']);
         $this->assertStringNotContainsString('650ML-WATER-BOTTLE', json_encode($definition, JSON_THROW_ON_ERROR));
 
         $expectedResolutions = [
