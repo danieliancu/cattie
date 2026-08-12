@@ -5,12 +5,17 @@ use App\Http\Controllers\Storefront\CartController;
 use App\Http\Controllers\Storefront\CheckoutController;
 use App\Http\Controllers\Storefront\HomeController;
 use App\Http\Controllers\Storefront\InformationPageController;
+use App\Http\Controllers\Storefront\ProductCategoryController;
 use App\Http\Controllers\Storefront\ProductController;
+use App\Http\Controllers\Storefront\SitemapController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');
 Route::get('/products/{slug}', [ProductController::class, 'show'])->name('products.show');
+Route::get('/collections/{category:slug}', [ProductCategoryController::class, 'show'])->name('categories.show');
+Route::get('/sitemap', [SitemapController::class, 'index'])->name('sitemap');
+Route::get('/sitemap.xml', [SitemapController::class, 'xml'])->name('sitemap.xml');
 Route::get('/terms-and-conditions', InformationPageController::class)->defaults('page', 'terms-and-conditions')->name('information.terms');
 Route::get('/faq', InformationPageController::class)->defaults('page', 'faq')->name('information.faq');
 Route::get('/delivery-shipping', InformationPageController::class)->defaults('page', 'delivery-shipping')->name('information.delivery');

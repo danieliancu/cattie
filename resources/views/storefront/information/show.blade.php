@@ -21,6 +21,8 @@
                 <section class="mt-10">
                     <h2 class="font-display text-2xl">UK delivery estimates</h2>
                     @include('storefront.information._delivery-table', [
+                        'productionHeading' => $content['delivery_table']['production_heading'],
+                        'productionMessage' => $content['delivery_table']['production_message'],
                         'methods' => $content['delivery_table']['methods'],
                         'disclaimer' => $content['delivery_table']['disclaimer'],
                     ])

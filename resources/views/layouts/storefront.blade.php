@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $title ?? 'Cattie.uk — Personalised gifts made magical' }}</title>
     <meta name="description" content="{{ $description ?? 'Turn a favourite photo into heartfelt personalised artwork and gifts.' }}">
+    @isset($robots)<meta name="robots" content="{{ $robots }}">@endisset
     <link rel="canonical" href="{{ $canonical ?? url()->current() }}">
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     <link rel="preconnect" href="https://fonts.bunny.net">
@@ -76,7 +77,7 @@
         </div>
         <div>
             <h2 class="text-xs font-bold uppercase tracking-[.16em] text-ink">About Us</h2>
-            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted"><li>About Cattie</li><li>Contact us</li><li><a class="hover:text-coral" href="{{ route('information.terms') }}">Terms and Conditions</a></li><li>Blog</li><li>Sitemap</li></ul>
+            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted"><li>About Cattie</li><li>Contact us</li><li><a class="hover:text-coral" href="{{ route('information.terms') }}">Terms and Conditions</a></li><li>Blog</li><li><a class="hover:text-coral" href="{{ route('sitemap') }}">Sitemap</a></li></ul>
         </div>
         <div>
             <h2 class="text-xs font-bold uppercase tracking-[.16em] text-ink">Customer Service</h2>

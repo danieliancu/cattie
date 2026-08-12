@@ -26,6 +26,15 @@ class Product extends Model
         return $this->hasMany(ProductVariant::class)->orderBy('sort_order');
     }
 
+    public function categories()
+    {
+        return $this->belongsToMany(ProductCategory::class, 'product_category')
+            ->withPivot('sort_order')
+            ->withTimestamps()
+            ->orderBy('product_categories.sort_order')
+            ->orderBy('product_categories.name');
+    }
+
     public function images()
     {
         return $this->hasMany(ProductImage::class)->orderBy('sort_order');

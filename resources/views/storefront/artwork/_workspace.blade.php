@@ -84,20 +84,20 @@
                 'nameUrl' => route('artwork.name', $session->public_id),
                 'csrf' => csrf_token(),
             ]))">
-                <div>
+                <div class="lg:sticky lg:top-24 lg:self-start">
                     @if($templated)
                         <div class="mb-4 flex justify-center gap-2" role="group" aria-label="Preview type">
-                            <button type="button" @click="previewMode = 'design'" :class="previewMode === 'design' ? 'bg-ink text-white' : 'bg-white text-ink'" class="rounded-full px-4 py-2 text-sm font-bold">Your bottle design</button>
+                            <button type="button" @click="previewMode = 'design'" :class="previewMode === 'design' ? 'bg-ink text-white' : 'bg-white text-ink'" class="rounded-full px-4 py-2 text-sm font-bold">{{ $session->product->preview_configuration['design_heading'] ?? 'Your bottle design' }}</button>
                             <button type="button" @click="previewMode = 'product'" :class="previewMode === 'product' ? 'bg-ink text-white' : 'bg-white text-ink'" class="rounded-full px-4 py-2 text-sm font-bold">Product</button>
                         </div>
                     @endif
 
                     @if($selectedDesign)
                         <div x-show="previewMode === 'design'" x-ref="editorCanvas" class="relative overflow-hidden rounded-[2.5rem]" style="aspect-ratio: {{ $designWidth }} / {{ $designHeight }}" :style="`aspect-ratio: {{ $designWidth }} / {{ $designHeight }}; background-color: ${surfaceColour}`">
-                            <img x-show="!editable" :src="selectedDesignUrl" alt="Your flat bottle print design" class="h-full w-full object-contain">
+                            <img x-show="!editable" :src="selectedDesignUrl" alt="Your flat personalised print design" class="h-full w-full object-contain">
                             <template x-if="editable">
                                 <div class="absolute inset-0">
-                                    <img :src="editorBackgroundUrl" alt="Your personalised bottle background" class="h-full w-full object-contain">
+                                    <img :src="editorBackgroundUrl" alt="Your personalised design background" class="h-full w-full object-contain">
                                     <div class="absolute overflow-visible" style="left:{{ (($characterConfig['x'] ?? .5) - (($characterConfig['max_width'] ?? .36) / 2)) * 100 }}%; top:{{ (($characterConfig['y'] ?? .5) - (($characterConfig['max_height'] ?? .84) / 2)) * 100 }}%; width:{{ ($characterConfig['max_width'] ?? .36) * 100 }}%; height:{{ ($characterConfig['max_height'] ?? .84) * 100 }}%">
                                         <div class="absolute inset-0 overflow-hidden">
                                             <div class="absolute" :style="`left:${50 + (offsetX / characterWidth * 100)}%; top:${50 + (offsetY / characterHeight * 100)}%; width:${scale * 100}%; height:${scale * 100}%; transform:translate(-50%,-50%)`">
@@ -151,8 +151,9 @@
 
                 <div class="self-center">
                     <p class="eyebrow">{{ $session->artworkStyle->name }}</p>
-                    <h1 class="mt-4 font-display text-5xl">{{ $session->status->value === 'approved' ? 'This is the one.' : ($templated ? 'Your bottle design' : 'Your artwork is ready.') }}</h1>
+                    <h1 class="mt-4 font-display text-5xl">{{ $session->status->value === 'approved' ? 'This is the one.' : ($templated ? ($session->product->preview_configuration['design_heading'] ?? 'Your bottle design') : 'Your artwork is ready.') }}</h1>
                     <p class="mt-5 leading-7 text-muted">{{ $templated ? 'This is the real flat print design, not a simulated bottle mockup. Your character is composed over a background made from the supplied name.' : 'Review the generated artwork before continuing.' }}</p>
+                    @if($session->product->categories->isNotEmpty())<p class="mt-4 text-sm text-muted"><span class="font-semibold text-ink">Categories:</span> @foreach($session->product->categories as $category)<a class="hover:text-coral hover:underline" href="{{ route('categories.show', $category) }}">{{ $category->name }}</a>@unless($loop->last) <span aria-hidden="true">·</span> @endunless @endforeach</p>@endif
 
                     @if($templated && $session->status->value === 'preview_ready')
                         <div class="mt-8">
@@ -171,7 +172,7 @@
 
                     @if($templated && $session->status->value === 'preview_ready')
                         <fieldset class="mt-8">
-                            <legend class="font-display text-xl">Bottle colour</legend>
+                            <legend class="font-display text-xl">{{ $session->product->preview_configuration['variant_label'] ?? 'Bottle colour' }}</legend>
                             <div class="bottle-colour-options mt-4 grid grid-cols-4 gap-2">
                                 @foreach($bottleVariants as $variant)
                                     @php($colourLabel = strtolower($variant->options['colour'] ?? '') === 'grey' ? 'Gray' : str($variant->options['colour'] ?? '')->title())
@@ -200,6 +201,7 @@
                         <h2 class="font-display text-2xl">About your gift</h2>
                         <p class="mt-4 leading-7 text-muted">{{ $session->product->description }}</p>
                     </div>
+                    @include('storefront.products._specifications', ['product' => $session->product])
                     @include('storefront.products._shipping-returns')
                 </div>
             </div>

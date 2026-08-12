@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Domain\Catalogue\Actions\SyncProductMarketingAssets;
 use App\Models\ArtworkStyle;
 use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\ProductDesignTemplate;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Storage;
@@ -51,6 +52,9 @@ class CatalogueSeeder extends Seeder
 
         $this->seedProdigiWaterBottle();
         $this->seedTreatPodWaterBottle();
+        $this->seedSmallPlasticLunchbox();
+        $this->seedStationeryPencilTin();
+        $this->seedProductCategories();
     }
 
     private function seedProdigiWaterBottle(): void
@@ -242,5 +246,239 @@ class CatalogueSeeder extends Seeder
             $product,
             resource_path('product-assets/cattie/water-bottle-with-red-flip-lid'),
         );
+    }
+
+    private function seedProductCategories(): void
+    {
+        $categories = collect([
+            [
+                'name' => 'School & Lunch',
+                'slug' => 'school-lunch',
+                'short_description' => 'Personalised everyday essentials for school, lunches and days out.',
+                'meta_title' => 'Personalised School & Lunch Gifts for Kids | Cattie.uk',
+                'meta_description' => 'Shop personalised school and lunch gifts for children, created with their name and unique Cattie artwork.',
+            ],
+            [
+                'name' => 'Kids Drinkware',
+                'slug' => 'kids-drinkware',
+                'short_description' => 'Personalised bottles and drinkware made especially for children.',
+                'meta_title' => 'Personalised Kids Drinkware | Cattie.uk',
+                'meta_description' => 'Discover personalised kids drinkware featuring their name and unique artwork, designed for school, sports and everyday adventures.',
+            ],
+            [
+                'name' => 'School Accessories',
+                'slug' => 'school-accessories',
+                'short_description' => 'Personalised school accessories made for lessons, homework and creative little minds.',
+                'meta_title' => 'Personalised School Accessories for Kids | Cattie.uk',
+                'meta_description' => 'Shop personalised school accessories for children, created with their name and unique Cattie artwork.',
+            ],
+        ])->map(function (array $data, int $position) {
+            return ProductCategory::query()->updateOrCreate(
+                ['slug' => $data['slug']],
+                $data + ['description' => null, 'is_active' => true, 'sort_order' => $position],
+            );
+        });
+
+        $product = Product::query()->where('slug', 'water-bottle-with-red-flip-lid')->firstOrFail();
+        $product->categories()->sync($categories
+            ->whereIn('slug', ['school-lunch', 'kids-drinkware'])
+            ->values()
+            ->mapWithKeys(fn (ProductCategory $category, int $position) => [
+                $category->id => ['sort_order' => $position],
+            ])->all());
+
+        Product::query()->where('slug', 'small-plastic-lunchbox')->firstOrFail()->categories()->sync([
+            $categories->firstWhere('slug', 'school-lunch')->id => ['sort_order' => 1],
+        ]);
+
+        Product::query()->where('slug', 'personalised-stationery-pencil-tin')->firstOrFail()->categories()->sync([
+            $categories->firstWhere('slug', 'school-accessories')->id => ['sort_order' => 0],
+            $categories->firstWhere('slug', 'school-lunch')->id => ['sort_order' => 1],
+        ]);
+    }
+
+    private function seedSmallPlasticLunchbox(): void
+    {
+        $designTemplate = ProductDesignTemplate::query()->updateOrCreate(
+            ['key' => 'small-lunchbox-v1'],
+            ['version' => 1, 'definition_path' => 'small-lunchbox-v1/template.json'],
+        );
+        $product = Product::query()->updateOrCreate(
+            ['slug' => 'small-plastic-lunchbox'],
+            [
+                'name' => 'Small Plastic Lunchbox',
+                'short_description' => 'A personalised lunchbox made for little hands, printed with their name and Cattie artwork.',
+                'description' => 'A compact personalised lunchbox with a white lid and colourful base, designed for school lunches, snacks and days out. It is made from food-safe BPA-free plastic and includes a child-friendly opening tab for easy everyday use.',
+                'meta_description' => 'Create a compact personalised children’s lunchbox with their name and unique Cattie artwork, ideal for school lunches, snacks and days out.',
+                'is_active' => true,
+                'sort_order' => 7,
+                'base_price_minor' => 1950,
+                'currency' => 'GBP',
+                'artwork_requirements' => ['source_photo' => 'required', 'orientation' => 'portrait_preferred'],
+                'preview_configuration' => [
+                    'default_variant_options' => ['colour' => 'blue'],
+                    'design_surfaces_by_variant' => ['blue' => '#ffffff', 'pink' => '#ffffff', 'white' => '#ffffff'],
+                    'variant_label' => 'Lunchbox colour',
+                    'design_heading' => 'Your lunchbox design',
+                    'specifications' => [
+                        ['label' => 'Material', 'value' => 'Food-safe BPA-free plastic with a printable aluminium lid insert'],
+                        ['label' => 'Features', 'value' => 'White lid and child-friendly opening tab'],
+                        ['label' => 'Dimensions', 'value' => '18 × 12.4 × 6 cm'],
+                        ['label' => 'Printable area', 'value' => '16.5 × 10.2 cm'],
+                        ['label' => 'Weight', 'value' => '283 g'],
+                    ],
+                ],
+                'product_design_template_id' => $designTemplate->id,
+                'recommended_artwork_style_id' => ArtworkStyle::query()->where('slug', 'storybook-cartoon')->value('id'),
+            ],
+        );
+
+        $variants = [
+            ['Blue', 'CATTIE-LUNCHBOX-SMALL-BLUE', 'blue', 'LUNCHBOX-BLUE'],
+            ['Pink', 'CATTIE-LUNCHBOX-SMALL-PINK', 'pink', 'LUNCHBOX-PINK'],
+            ['White', 'CATTIE-LUNCHBOX-SMALL-WHITE', 'white', null],
+        ];
+        foreach ($variants as $index => [$name, $sku, $colour, $providerSku]) {
+            $variant = $product->variants()->withTrashed()->updateOrCreate(
+                ['sku' => $sku],
+                ['name' => $name, 'options' => ['colour' => $colour, 'size' => 'small'], 'price_minor' => 1950, 'currency' => 'GBP', 'is_active' => true, 'sort_order' => $index],
+            );
+            if ($variant->trashed()) {
+                $variant->restore();
+            }
+            if ($providerSku === null) {
+                $variant->fulfilmentMappings()->where('provider', 'treatpod')->delete();
+
+                continue;
+            }
+            $variant->fulfilmentMappings()->updateOrCreate(
+                ['provider' => 'treatpod'],
+                [
+                    'provider_sku' => $providerSku,
+                    'configuration' => [
+                        'attributes' => ['colour' => $colour, 'size' => 'small', 'material' => 'food-safe BPA-free plastic', 'weight_g' => 283],
+                        'physical_product_dimensions' => ['width' => 180, 'depth' => 124, 'height' => 60, 'unit' => 'mm'],
+                        'physical_print_area' => ['width' => 165, 'height' => 102, 'unit' => 'mm'],
+                        'print_method' => 'printable aluminium insert',
+                        'placement' => 'lid',
+                        'print_areas' => ['default' => ['width' => 1949, 'height' => 1205, 'derived_from' => '165x102mm_at_300dpi', 'dpi' => 300, 'supplier_template_validated' => false]],
+                    ],
+                    'is_active' => true,
+                ],
+            );
+        }
+        $product->variants()->whereNotIn('sku', collect($variants)->pluck(1))->update(['is_active' => false]);
+        $product->artworkStyles()->sync(ArtworkStyle::query()->whereIn('slug', ['storybook-cartoon', 'hand-drawn'])->pluck('id'));
+        $product->personalisationFields()->delete();
+        $product->personalisationFields()->create(['key' => 'name', 'label' => 'Name', 'type' => 'text', 'is_required' => true, 'validation_rules' => ['max' => 12], 'configuration' => [], 'sort_order' => 0]);
+
+        $marketing = app(SyncProductMarketingAssets::class)->handle($product, resource_path('product-assets/cattie/small-plastic-lunchbox'));
+        $marketingColours = collect($marketing)->pluck('variant')->unique();
+        $assets = config('product-assets.suppliers.treatpod.LUNCHBOX-SMALL.assets');
+        foreach ($assets as $asset) {
+            $colour = $asset['variant_options']['colour'];
+            $source = resource_path('product-assets/treatpod/LUNCHBOX-SMALL/'.$asset['filename']);
+            Storage::disk($asset['public']['disk'])->put($asset['public']['storage_key'], file_get_contents($source));
+            if ($marketingColours->contains($colour)) {
+                $product->images()->where('storage_key', $asset['public']['storage_key'])->delete();
+
+                continue;
+            }
+            $variant = $product->variants()->where('options->colour', $colour)->firstOrFail();
+            $product->images()->updateOrCreate(
+                ['storage_key' => $asset['public']['storage_key']],
+                ['product_variant_id' => $variant->id, 'disk' => $asset['public']['disk'], 'alt_text' => $asset['alt_text'], 'sort_order' => $asset['sort_order']],
+            );
+        }
+    }
+
+    private function seedStationeryPencilTin(): void
+    {
+        $designTemplate = ProductDesignTemplate::query()->updateOrCreate(
+            ['key' => 'stationery-pencil-tin-v1'],
+            ['version' => 1, 'definition_path' => 'stationery-pencil-tin-v1/template.json'],
+        );
+        $product = Product::query()->updateOrCreate(
+            ['slug' => 'personalised-stationery-pencil-tin'],
+            [
+                'name' => 'Personalised Stationery & Pencil Tin',
+                'short_description' => 'A personalised metal pencil tin made for school, homework and creative little minds.',
+                'description' => 'A sturdy personalised stationery tin with plenty of room for pencils, pens and small school essentials. Add their name and unique Cattie artwork to create an everyday school accessory made especially for them.',
+                'meta_description' => 'Create a personalised pencil tin for children featuring their name and unique Cattie artwork â€” perfect for school, homework and creative time.',
+                'is_active' => true,
+                'sort_order' => 8,
+                'base_price_minor' => 1795,
+                'currency' => 'GBP',
+                'artwork_requirements' => ['source_photo' => 'required', 'orientation' => 'portrait_preferred'],
+                'preview_configuration' => [
+                    'default_variant_options' => ['colour' => 'blue'],
+                    'design_surfaces_by_variant' => ['blue' => '#ffffff', 'pink' => '#ffffff', 'silver' => '#ffffff'],
+                    'variant_label' => 'Tin colour',
+                    'design_heading' => 'Your pencil tin design',
+                    'specifications' => [
+                        ['label' => 'Material', 'value' => 'Metal stationery tin with a white glossy printable insert'],
+                        ['label' => 'Dimensions', 'value' => '18.8 Ã— 8 Ã— 2.4 cm'],
+                        ['label' => 'Print area', 'value' => '18.5 Ã— 7.6 cm'],
+                        ['label' => 'Weight', 'value' => 'Approximately 170 g'],
+                        ['label' => 'Suitable for', 'value' => 'Pencils, pens and school essentials'],
+                        ['label' => 'Personalisation', 'value' => 'Name and unique Cattie artwork'],
+                    ],
+                ],
+                'product_design_template_id' => $designTemplate->id,
+                'recommended_artwork_style_id' => ArtworkStyle::query()->where('slug', 'storybook-cartoon')->value('id'),
+            ],
+        );
+
+        $variants = [
+            ['Blue', 'CATTIE-PENCIL-TIN-BLUE', 'blue', 'SUBSTATIONERYTIN-BLU'],
+            ['Pink', 'CATTIE-PENCIL-TIN-PINK', 'pink', 'SUBSTATIONERYTIN-PNK'],
+            ['Silver', 'CATTIE-PENCIL-TIN-SILVER', 'silver', 'SUBSTATIONERYTIN'],
+        ];
+        foreach ($variants as $index => [$name, $sku, $colour, $providerSku]) {
+            $variant = $product->variants()->withTrashed()->updateOrCreate(
+                ['sku' => $sku],
+                ['name' => $name, 'options' => ['colour' => $colour], 'price_minor' => 1795, 'currency' => 'GBP', 'is_active' => true, 'sort_order' => $index],
+            );
+            if ($variant->trashed()) {
+                $variant->restore();
+            }
+            $variant->fulfilmentMappings()->updateOrCreate(
+                ['provider' => 'treatpod'],
+                [
+                    'provider_sku' => $providerSku,
+                    'configuration' => [
+                        'attributes' => ['colour' => $colour, 'material' => 'stainless steel', 'weight_g' => 170],
+                        'physical_product_dimensions' => ['width' => 188, 'depth' => 80, 'height' => 24, 'unit' => 'mm'],
+                        'physical_print_area' => ['width' => 185, 'height' => 76, 'unit' => 'mm'],
+                        'print_method' => 'printable white glossy metal insert',
+                        'placement' => 'lid insert',
+                        'print_areas' => ['default' => ['width' => 2185, 'height' => 898, 'derived_from' => '185x76mm_at_300dpi', 'dpi' => 300, 'supplier_template_validated' => false]],
+                    ],
+                    'is_active' => true,
+                ],
+            );
+        }
+        $product->variants()->whereNotIn('sku', collect($variants)->pluck(1))->update(['is_active' => false]);
+        $product->artworkStyles()->sync(ArtworkStyle::query()->whereIn('slug', ['storybook-cartoon', 'hand-drawn'])->pluck('id'));
+        $product->personalisationFields()->delete();
+        $product->personalisationFields()->create(['key' => 'name', 'label' => 'Name', 'type' => 'text', 'is_required' => true, 'validation_rules' => ['max' => 12], 'configuration' => [], 'sort_order' => 0]);
+
+        $marketing = app(SyncProductMarketingAssets::class)->handle($product, resource_path('product-assets/cattie/stationery-pencil-tin'));
+        $marketingColours = collect($marketing)->pluck('variant')->unique();
+        foreach (config('product-assets.suppliers.treatpod.STATIONERY-PENCIL-TIN.assets') as $asset) {
+            $colour = $asset['variant_options']['colour'];
+            $source = resource_path('product-assets/treatpod/STATIONERY-PENCIL-TIN/'.$asset['filename']);
+            Storage::disk($asset['public']['disk'])->put($asset['public']['storage_key'], file_get_contents($source));
+            if ($marketingColours->contains($colour)) {
+                $product->images()->where('storage_key', $asset['public']['storage_key'])->delete();
+
+                continue;
+            }
+            $variant = $product->variants()->where('options->colour', $colour)->firstOrFail();
+            $product->images()->updateOrCreate(
+                ['storage_key' => $asset['public']['storage_key']],
+                ['product_variant_id' => $variant->id, 'disk' => $asset['public']['disk'], 'alt_text' => $asset['alt_text'], 'sort_order' => $asset['sort_order']],
+            );
+        }
     }
 }

@@ -164,7 +164,7 @@ class ComposedDesignTest extends TestCase
         $response->assertOk()->assertSee('Your bottle design')->assertSee('Product')->assertDontSee('Artwork only')->assertDontSee('Try another version')->assertSee('Bottle colour')->assertSee('Product examples')->assertSee('Personalised examples shown for inspiration.')->assertDontSee('Prodigi')->assertDontSee('Previous designs')
             ->assertSee('About your gift')->assertSee('Made')->assertSee('For You')->assertSee('Secure')->assertSee('Privacy')
             ->assertSee('Shipping &amp; Returns', false)->assertSee('Personalised Item Returns')->assertSee('Delivery')
-            ->assertSee('Royal Mail Tracked 48')->assertDontSee('99 Day');
+            ->assertSee('Made and printed in the UK')->assertSee('Royal Mail 48 Tracked')->assertDontSee('99 Day');
         $response->assertSee("previewMode = 'product'; exampleUrl =", false)->assertSee('aspect-ratio: 2717 / 2008', false)->assertDontSee('aspect-[6/5]', false);
         foreach (['anna-product.png', 'anna-school.png', 'anna-home.png', 'anna-street.png', 'adrian-product.png'] as $path) {
             $response->assertSee($path, false);

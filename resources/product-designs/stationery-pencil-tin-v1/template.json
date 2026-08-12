@@ -1,0 +1,64 @@
+{
+  "key": "stationery-pencil-tin-v1",
+  "version": 1,
+  "coordinate_system": "normalized",
+  "output_size": { "source": "variant_print_area", "print_area": "default" },
+  "safe_zones": [
+    { "id": "primary-content", "x": 0.025, "y": 0.06, "width": 0.95, "height": 0.88 }
+  ],
+  "character": {
+    "x": 0.5,
+    "y": 0.51,
+    "scale": 1.0,
+    "offset_x": 0.0,
+    "offset_y": 0.0,
+    "max_width": 0.25,
+    "max_height": 0.82
+  },
+  "layers": [
+    { "id": "background", "type": "solid", "colour": "#ffffff" },
+    {
+      "id": "repeated-name",
+      "type": "personalisation_text_pattern",
+      "field": "name",
+      "safe_zone": "primary-content",
+      "variant_option": "colour",
+      "colours_by_variant": {
+        "blue": "#2563EB",
+        "pink": "#EC4899",
+        "silver": "#6B7280"
+      },
+      "styles": {
+        "caps-condensed": { "font_family": "Anton", "font_source": "assets/fonts/Anton-Regular.ttf", "font_weight": 400, "uppercase": true, "letter_spacing": 0.01 },
+        "serif-display": { "font_family": "Bodoni Moda", "font_source": "assets/fonts/BodoniModa_18pt-Regular.ttf", "font_weight": 400, "uppercase": false, "letter_spacing": 0.0 },
+        "rounded-display": { "font_family": "Fredoka", "font_source": "assets/fonts/Fredoka-SemiBold.ttf", "font_weight": 600, "uppercase": false, "letter_spacing": 0.0 },
+        "script-display": { "font_family": "Allura", "font_source": "assets/fonts/Allura-Regular.ttf", "font_weight": 400, "uppercase": false, "letter_spacing": 0.0 }
+      },
+      "items": [
+        { "style": "caps-condensed", "size": 0.09, "rotation": 0, "x": 0.08, "y": 0.12 },
+        { "style": "serif-display", "size": 0.065, "rotation": 0, "x": 0.25, "y": 0.12 },
+        { "style": "rounded-display", "size": 0.06, "rotation": 0, "x": 0.42, "y": 0.10 },
+        { "style": "script-display", "size": 0.105, "rotation": 0, "x": 0.67, "y": 0.12 },
+        { "style": "rounded-display", "size": 0.06, "rotation": 90, "x": 0.95, "y": 0.20 },
+        { "style": "serif-display", "size": 0.065, "rotation": 90, "x": 0.03, "y": 0.34 },
+        { "style": "script-display", "size": 0.11, "rotation": 0, "x": 0.16, "y": 0.33 },
+        { "style": "caps-condensed", "size": 0.078, "rotation": 90, "x": 0.31, "y": 0.32 },
+        { "style": "rounded-display", "size": 0.06, "rotation": 0, "x": 0.70, "y": 0.30 },
+        { "style": "caps-condensed", "size": 0.095, "rotation": 0, "x": 0.86, "y": 0.38 },
+        { "style": "serif-display", "size": 0.065, "rotation": 0, "x": 0.10, "y": 0.57 },
+        { "style": "rounded-display", "size": 0.068, "rotation": 90, "x": 0.28, "y": 0.58 },
+        { "style": "script-display", "size": 0.095, "rotation": 0, "x": 0.72, "y": 0.54 },
+        { "style": "serif-display", "size": 0.06, "rotation": 90, "x": 0.92, "y": 0.60 },
+        { "style": "caps-condensed", "size": 0.08, "rotation": 0, "x": 0.10, "y": 0.79 },
+        { "style": "script-display", "size": 0.095, "rotation": 0, "x": 0.31, "y": 0.80 },
+        { "style": "rounded-display", "size": 0.062, "rotation": 0, "x": 0.68, "y": 0.77 },
+        { "style": "caps-condensed", "size": 0.078, "rotation": 90, "x": 0.86, "y": 0.79 },
+        { "style": "serif-display", "size": 0.062, "rotation": 0, "x": 0.12, "y": 0.94 },
+        { "style": "rounded-display", "size": 0.062, "rotation": 0, "x": 0.36, "y": 0.92 },
+        { "style": "caps-condensed", "size": 0.082, "rotation": 0, "x": 0.63, "y": 0.93 },
+        { "style": "script-display", "size": 0.095, "rotation": 0, "x": 0.87, "y": 0.92 }
+      ]
+    },
+    { "id": "character", "type": "generation_asset", "config": "character", "fit": "contain" }
+  ]
+}

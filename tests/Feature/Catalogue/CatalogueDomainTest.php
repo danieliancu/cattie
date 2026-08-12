@@ -52,7 +52,7 @@ class CatalogueDomainTest extends TestCase
         Storage::fake('public');
         $this->seed(CatalogueSeeder::class);
 
-        $this->assertDatabaseCount('products', 7);
+        $this->assertDatabaseCount('products', 9);
         $this->assertDatabaseHas('products', ['slug' => 'best-friend-pet-portrait', 'currency' => 'GBP']);
         $this->assertSame(2, Product::query()->where('slug', 'childrens-storybook-wall-print')->firstOrFail()->artworkStyles()->count());
         Storage::disk('public')->assertExists('demo/catalogue/storybook-print.svg');
@@ -94,7 +94,7 @@ class CatalogueDomainTest extends TestCase
         $this->assertSame('bottle-wrap-v1', $bottle->designTemplate->key);
         $this->assertSame(4, $bottle->designTemplate->version);
         $this->assertSame(12, $bottle->personalisationFields()->where('key', 'name')->firstOrFail()->validation_rules['max']);
-        $this->assertSame(2, ProductDesignTemplate::query()->count());
+        $this->assertSame(4, ProductDesignTemplate::query()->count());
         $definition = $bottle->designTemplate->definition();
         $this->assertSame('normalized', $definition['coordinate_system']);
         $this->assertSame('variant_print_area', $definition['output_size']['source']);
@@ -158,7 +158,7 @@ class CatalogueDomainTest extends TestCase
         $this->seed(CatalogueSeeder::class);
         $this->assertSame(4, FulfilmentProductMapping::query()->where('provider', 'prodigi')->count());
         $this->assertSame(4, $bottle->fresh()->images()->count());
-        $this->assertSame(2, FulfilmentProductMapping::query()->where('provider', 'treatpod')->count());
+        $this->assertSame(7, FulfilmentProductMapping::query()->where('provider', 'treatpod')->count());
         $this->assertSame(8, $treatPodBottle->fresh()->images()->count());
     }
 

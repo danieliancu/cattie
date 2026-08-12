@@ -31,14 +31,17 @@ class InformationPagesTest extends TestCase
     public function test_delivery_policy_has_production_time_and_accessible_uk_estimates(): void
     {
         $this->get(route('information.delivery'))->assertOk()
-            ->assertSee('3–5 working days')
-            ->assertSee('Delivery method')->assertSee('After dispatch')->assertSee('Estimated total')
-            ->assertSee('Royal Mail Tracked 48')->assertSee('2–4 working days')->assertSee('approx. 5–9 working days')
-            ->assertSee('Royal Mail Tracked 24')->assertSee('1–2 working days')->assertSee('approx. 4–7 working days')
-            ->assertSee('DPD')->assertSee('1 working day')->assertSee('approx. 4–6 working days')
-            ->assertSee('Times are estimates and may occasionally vary.')
+            ->assertSee('Made and printed in the UK')->assertSee('data-lucide="map"', false)
+            ->assertSee('Your personalised gift is made to order, usually within 3–5 working days.')
+            ->assertSee('Price')->assertSee('Estimated delivery')->assertSee('Delivery method')
+            ->assertSee('£3.50')->assertSee('5–8 business days')->assertSee('Royal Mail 48 Tracked')
+            ->assertSee('£4.13')->assertSee('4–7 business days')->assertSee('Royal Mail 24 Tracked')
+            ->assertSee('£7.49')->assertSee('4 business days')->assertSee('DPD')
+            ->assertSee('Delivery times are estimates and may occasionally vary during busy periods or due to carrier delays.')
             ->assertSee('<table', false)->assertSee('<caption class="sr-only">', false)
-            ->assertDontSee('1–3 working days')->assertDontSee('fulfilment provider');
+            ->assertDontSee('After dispatch')->assertDontSee('approx. 5–9 working days')
+            ->assertDontSee('approx. 4–6 working days')->assertDontSee('Delivery estimates start after')
+            ->assertDontSee('fulfilment provider')->assertDontSee('TreatPod');
     }
 
     public function test_returns_policy_covers_personalised_fault_and_cancellation_cases(): void
@@ -65,7 +68,11 @@ class InformationPagesTest extends TestCase
             ->assertSee('damaged, defective, incorrect, or is not as described')
             ->assertSee('This does not affect your statutory rights.')
             ->assertSee('href="'.route('information.returns').'"', false)
-            ->assertSee('3–5 working days')->assertSee('Royal Mail Tracked 48')
+            ->assertSee('Made and printed in the UK')->assertSee('3–5 working days')
+            ->assertSee('£3.50')->assertSee('Royal Mail 48 Tracked')->assertSee('5–8 business days')
+            ->assertSee('£4.13')->assertSee('Royal Mail 24 Tracked')->assertSee('4–7 business days')
+            ->assertSee('£7.49')->assertSee('DPD')->assertSee('4 business days')
+            ->assertDontSee('After dispatch')->assertDontSee('approx. 5–9 working days')
             ->assertDontSee('99 Day')->assertDontSee('Delivery Time = Processing Time');
     }
 

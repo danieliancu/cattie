@@ -35,13 +35,12 @@ return [
         'title' => 'Delivery & Shipping',
         'description' => 'Production and estimated delivery times for personalised Cattie orders in the United Kingdom.',
         'sections' => [
-            ['Production', ['Each item is made to order after your personalised artwork and payment have been approved. Production normally takes '.$policy['production_time'].' and is separate from the delivery time shown below.']],
-            ['Dispatch and delivery', ['Delivery estimates begin only after production is complete and your order has been dispatched. They are estimates rather than guaranteed arrival dates.']],
+            ['Production and delivery', ['Each item is made to order after your personalised artwork and payment have been approved. The delivery estimates shown below are the total expected times and already include production.']],
             ['Tracking', ['Where tracking is available, we will provide it after dispatch. Tracking can take a little time to show its first carrier update.']],
             ['Delays and address changes', ['Busy periods, weather and carrier disruption may occasionally extend delivery estimates. Contact support@cattie.uk promptly if an address needs correcting. We cannot normally redirect a parcel after dispatch.']],
             ['Sending directly as a gift', ['You may use the recipient’s UK address at checkout. Please check it carefully, including the postcode, before confirming the order.']],
         ],
-        'delivery_table' => ['methods' => $policy['delivery_methods'], 'disclaimer' => $policy['delivery_disclaimer']],
+        'delivery_table' => ['production_heading' => $policy['production_heading'], 'production_message' => $policy['production_message'], 'methods' => $policy['delivery_methods'], 'disclaimer' => $policy['delivery_disclaimer']],
     ],
     'returns-policy' => [
         'title' => 'Returns Policy',

@@ -27,7 +27,6 @@
 
     <div class="mt-8">
         <h3 class="text-sm font-bold leading-tight">Delivery</h3>
-        <p class="mt-4 leading-7 text-muted"><span class="font-semibold text-ink">Production:</span> {{ $policy['production_time'] }}</p>
-        @include('storefront.information._delivery-table', ['methods' => $policy['delivery_methods'], 'disclaimer' => $policy['delivery_disclaimer']])
+        @include('storefront.information._delivery-table', ['productionHeading' => $policy['production_heading'], 'productionMessage' => $policy['production_message'], 'methods' => $policy['delivery_methods'], 'disclaimer' => $policy['delivery_disclaimer']])
     </div>
 </div>

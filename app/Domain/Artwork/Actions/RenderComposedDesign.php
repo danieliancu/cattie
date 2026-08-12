@@ -53,7 +53,7 @@ class RenderComposedDesign
                 match ($layer['type'] ?? null) {
                     'transparent' => $this->renderTransparent($canvas),
                     'solid' => $this->renderSolid($canvas, $layer, $session->variant->options ?? []),
-                    'personalisation_text_pattern' => $this->renderTextPattern($canvas, $layer, $definition, $personalisation->all(), $template),
+                    'personalisation_text_pattern' => $this->renderTextPattern($canvas, $layer, $definition, $personalisation->all(), $template, $session->variant->options ?? []),
                     'generation_asset' => $this->renderGenerationAsset($canvas, $source, $layer, $definition[$layer['config'] ?? ''] ?? [], $characterAdjustments),
                     default => throw new RuntimeException('The design template contains an unsupported layer.'),
                 };
@@ -160,10 +160,10 @@ class RenderComposedDesign
         imagealphablending($canvas, true);
     }
 
-    private function renderTextPattern(\GdImage $canvas, array $layer, array $definition, array $personalisation, ProductDesignTemplate $template): void
+    private function renderTextPattern(\GdImage $canvas, array $layer, array $definition, array $personalisation, ProductDesignTemplate $template, array $variantOptions): void
     {
-        $value = trim((string) ($personalisation[$layer['field'] ?? '']['value'] ?? ''));
-        if ($value === '') {
+        $textValue = trim((string) ($personalisation[$layer['field'] ?? '']['value'] ?? ''));
+        if ($textValue === '') {
             return;
         }
         $zone = collect($definition['safe_zones'])->firstWhere('id', $layer['safe_zone'] ?? null);
@@ -176,7 +176,15 @@ class RenderComposedDesign
         if (! is_array($styles) || $styles === [] || ! is_array($items) || $items === []) {
             throw new RuntimeException('The text pattern configuration is invalid.');
         }
-        $colour = $this->colour($canvas, $layer['colour'] ?? '#ffffff');
+        $colourValue = $layer['colour'] ?? null;
+        if ($option = $layer['variant_option'] ?? null) {
+            $variantValue = mb_strtolower(trim((string) ($variantOptions[$option] ?? '')));
+            $colourValue = $layer['colours_by_variant'][$variantValue] ?? null;
+            if (! is_string($colourValue)) {
+                throw new RuntimeException("The design text colour is not configured for [{$option}:{$variantValue}].");
+            }
+        }
+        $colour = $this->colour($canvas, $colourValue ?? '#ffffff');
         usort($items, fn (array $left, array $right): int => ((float) ($right['size'] ?? 0)) <=> ((float) ($left['size'] ?? 0)));
         $occupied = [];
         $collisionPadding = max(2, (int) round(min(imagesx($canvas), imagesy($canvas)) * .006));
@@ -195,7 +203,7 @@ class RenderComposedDesign
             if (! is_numeric($letterSpacing) || (float) $letterSpacing < 0 || (float) $letterSpacing > 1) {
                 throw new RuntimeException('Design letter spacing must be between 0 and 1 em.');
             }
-            $text = ($style['uppercase'] ?? false) ? mb_strtoupper($value) : $value;
+            $text = ($style['uppercase'] ?? false) ? mb_strtoupper($textValue) : $textValue;
             $centreX = $rect['x'] + ((float) ($item['x'] ?? 0) * $rect['width']);
             $centreY = $rect['y'] + ((float) ($item['y'] ?? 0) * $rect['height']);
             $fontSize = max(18, (int) round(min(imagesx($canvas), imagesy($canvas)) * (float) ($item['size'] ?? .04)));

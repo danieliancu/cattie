@@ -1,10 +1,10 @@
 import './bootstrap';
 import Alpine from 'alpinejs';
-import { Cat, createIcons, LockKeyhole, Menu, RotateCcw, Search, ShieldCheck, ShoppingBag, UserRound, X } from 'lucide';
+import { Cat, createIcons, Heart, LockKeyhole, Map, Menu, RotateCcw, Search, ShieldCheck, ShoppingBag, UserRound, X } from 'lucide';
 
 window.Alpine = Alpine;
 Alpine.start();
 
 createIcons({
-    icons: {Cat, LockKeyhole, Menu, RotateCcw, Search, ShieldCheck, ShoppingBag, UserRound, X},
+    icons: {Cat, Heart, LockKeyhole, Map, Menu, RotateCcw, Search, ShieldCheck, ShoppingBag, UserRound, X},
 });
