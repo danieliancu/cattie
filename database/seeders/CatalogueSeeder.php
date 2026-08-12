@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Domain\Catalogue\Actions\SyncProductMarketingAssets;
 use App\Models\ArtworkStyle;
 use App\Models\Product;
 use App\Models\ProductDesignTemplate;
@@ -48,10 +49,11 @@ class CatalogueSeeder extends Seeder
             }
         }
 
-        $this->seedDormantWaterBottle();
+        $this->seedProdigiWaterBottle();
+        $this->seedTreatPodWaterBottle();
     }
 
-    private function seedDormantWaterBottle(): void
+    private function seedProdigiWaterBottle(): void
     {
         $designTemplate = ProductDesignTemplate::query()->updateOrCreate(
             ['key' => 'bottle-wrap-v1'],
@@ -65,7 +67,7 @@ class CatalogueSeeder extends Seeder
                 'short_description' => 'A future personalised 650 ml insulated bottle.',
                 'description' => 'Inactive catalogue placeholder for the first Prodigi-backed Cattie bottle.',
                 'meta_description' => null,
-                'is_active' => true,
+                'is_active' => false,
                 'sort_order' => 999,
                 'base_price_minor' => 1650,
                 'currency' => 'GBP',
@@ -160,5 +162,85 @@ class CatalogueSeeder extends Seeder
                 'sort_order' => $asset['sort_order'],
             ]);
         }
+    }
+
+    private function seedTreatPodWaterBottle(): void
+    {
+        $designTemplate = ProductDesignTemplate::query()->updateOrCreate(
+            ['key' => 'red-flip-bottle-wrap-v1'],
+            ['version' => 1, 'definition_path' => 'red-flip-bottle-wrap-v1/template.json'],
+        );
+
+        $product = Product::query()->updateOrCreate(
+            ['slug' => 'water-bottle-with-red-flip-lid'],
+            [
+                'name' => 'Water Bottle with Red Flip Lid',
+                'short_description' => 'A personalised 750 ml aluminium bottle with a bright red flip lid, made unique with their name and artwork.',
+                'description' => 'A lightweight 750 ml aluminium water bottle with a red flip lid, personalised with their name and Cattie artwork. The wraparound design makes it a colourful everyday bottle for school, sports and days out. The Silver option has a subtle shimmering finish.',
+                'meta_description' => 'Create a personalised 750 ml aluminium water bottle with a red flip lid, name and custom Cattie artwork.',
+                'is_active' => true,
+                'sort_order' => 6,
+                'base_price_minor' => 1650,
+                'currency' => 'GBP',
+                'artwork_requirements' => ['source_photo' => 'required', 'orientation' => 'portrait_preferred'],
+                'preview_configuration' => [
+                    'default_variant_options' => ['colour' => 'white'],
+                    'design_surfaces_by_variant' => [
+                        'white' => '#ffffff',
+                        'silver' => '#d9dde2',
+                    ],
+                ],
+                'product_design_template_id' => $designTemplate->id,
+                'recommended_artwork_style_id' => ArtworkStyle::query()->where('slug', 'storybook-cartoon')->value('id'),
+            ],
+        );
+
+        $variants = [
+            ['White · 750 ml', 'CATTIE-WB-750-WHITE', 'white', 'WB-750MLWHT-FLIPRED'],
+            ['Silver · 750 ml', 'CATTIE-WB-750-SILVER', 'silver', 'WB-750MLSLV-FLIPRED'],
+        ];
+        $internalSkus = [];
+        foreach ($variants as $index => [$name, $sku, $colour, $providerSku]) {
+            $internalSkus[] = $sku;
+            $variant = $product->variants()->withTrashed()->updateOrCreate(
+                ['sku' => $sku],
+                ['name' => $name, 'options' => ['colour' => $colour, 'size' => '750ml'], 'price_minor' => 1650, 'currency' => 'GBP', 'is_active' => true, 'sort_order' => $index],
+            );
+            if ($variant->trashed()) {
+                $variant->restore();
+            }
+            $variant->fulfilmentMappings()->updateOrCreate(
+                ['provider' => 'treatpod'],
+                [
+                    'provider_sku' => $providerSku,
+                    'configuration' => [
+                        'attributes' => ['colour' => $colour, 'size' => '750ml', 'capacity_ml' => 750, 'material' => 'aluminium', 'lid_colour' => 'red'],
+                        'print_method' => 'sublimation',
+                        'placement' => 'wraparound',
+                        'physical_print_area' => ['width' => 230, 'height' => 170, 'unit' => 'mm'],
+                        'print_areas' => [
+                            'default' => ['width' => 2717, 'height' => 2008, 'derived_from' => '230x170mm_at_300dpi', 'supplier_template_validated' => false],
+                        ],
+                    ],
+                    'is_active' => true,
+                ],
+            );
+        }
+        $product->variants()->whereNotIn('sku', $internalSkus)->update(['is_active' => false]);
+
+        $product->artworkStyles()->sync(ArtworkStyle::query()->whereIn('slug', ['storybook-cartoon', 'hand-drawn'])->pluck('id'));
+        $product->personalisationFields()->delete();
+        $product->personalisationFields()->create([
+            'key' => 'name', 'label' => 'Name', 'type' => 'text', 'is_required' => true,
+            'validation_rules' => ['max' => 12], 'configuration' => [], 'sort_order' => 0,
+        ]);
+
+        $supplierAssets = config('product-assets.suppliers.treatpod.WB-750ML-FLIP.assets');
+        $product->images()->whereIn('storage_key', collect($supplierAssets)->pluck('public.storage_key'))->delete();
+
+        app(SyncProductMarketingAssets::class)->handle(
+            $product,
+            resource_path('product-assets/cattie/water-bottle-with-red-flip-lid'),
+        );
     }
 }

@@ -47,5 +47,52 @@ return [
                 ],
             ],
         ],
+        'treatpod' => [
+            'WB-750ML-FLIP' => [
+                'source_directory' => 'product-assets/treatpod/WB-750ML-FLIP',
+                'assets' => [
+                    'white-primary' => [
+                        'filename' => 'wb-750mlwht-flipred.jpg',
+                        'role' => 'primary',
+                        'variant_options' => ['colour' => 'white'],
+                        'public' => ['disk' => 'public', 'storage_key' => 'products/water-bottle-with-red-flip-lid/catalogue/wb-750mlwht-flipred.jpg'],
+                        'alt_text' => 'White 750 ml aluminium water bottle with a red flip lid',
+                        'sort_order' => 0,
+                    ],
+                    'white-gallery' => [
+                        'filename' => 'wb-750mlwht-flipredm.jpg',
+                        'role' => 'gallery',
+                        'variant_options' => ['colour' => 'white'],
+                        'public' => ['disk' => 'public', 'storage_key' => 'products/water-bottle-with-red-flip-lid/catalogue/wb-750mlwht-flipredm.jpg'],
+                        'alt_text' => 'White bottle displaying an example wraparound printed design',
+                        'sort_order' => 1,
+                    ],
+                    'silver-primary' => [
+                        'filename' => 'wb-750mlslv-flipred.jpg',
+                        'role' => 'primary',
+                        'variant_options' => ['colour' => 'silver'],
+                        'public' => ['disk' => 'public', 'storage_key' => 'products/water-bottle-with-red-flip-lid/catalogue/wb-750mlslv-flipred.jpg'],
+                        'alt_text' => 'Silver 750 ml aluminium water bottle with a red flip lid',
+                        'sort_order' => 10,
+                    ],
+                    'silver-gallery' => [
+                        'filename' => 'wb-750mlslv-flipredm.jpg',
+                        'role' => 'gallery',
+                        'variant_options' => ['colour' => 'silver'],
+                        'public' => ['disk' => 'public', 'storage_key' => 'products/water-bottle-with-red-flip-lid/catalogue/wb-750mlslv-flipredm.jpg'],
+                        'alt_text' => 'Silver bottle displaying an example printed design',
+                        'sort_order' => 11,
+                    ],
+                    'silver-detail' => [
+                        'filename' => 'wb-750mlslv-flipred-1a0f7e95-6a87-46c6-9c05-02ef967ee1ac.jpg',
+                        'role' => 'detail',
+                        'variant_options' => ['colour' => 'silver'],
+                        'public' => ['disk' => 'public', 'storage_key' => 'products/water-bottle-with-red-flip-lid/catalogue/wb-750mlslv-flipred-1a0f7e95-6a87-46c6-9c05-02ef967ee1ac.jpg'],
+                        'alt_text' => 'Example showing how bold artwork appears on the silver bottle finish',
+                        'sort_order' => 12,
+                    ],
+                ],
+            ],
+        ],
     ],
 ];

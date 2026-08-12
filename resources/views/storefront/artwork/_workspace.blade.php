@@ -45,13 +45,29 @@
             @php($selectedAsset = $session->approvedAsset ?? $selectedDesign?->generationAsset ?? $session->currentGeneration?->assets->firstWhere('kind', 'provider_original'))
             @php($artworkPreview = $selectedAsset?->generation?->assets?->firstWhere('kind', 'web_preview') ?? $session->currentGeneration?->assets->firstWhere('kind', 'web_preview'))
             @php($productExamples = $session->product->images->sortBy('sort_order')->values())
-            @php($bottleVariants = $session->product->variants->filter(fn ($variant) => $variant->is_active && in_array(strtolower($variant->options['colour'] ?? ''), ['black', 'gray', 'grey', 'navy', 'red'], true))->values())
+            @php($examplesFollowVariant = $productExamples->contains(fn ($image) => (bool) $image->product_variant_id))
+            @php($bottleVariants = $session->product->variants->filter(fn ($variant) => $variant->is_active)->values())
+            @php($selectedVariant = $bottleVariants->firstWhere('id', $session->product_variant_id))
+            @php($selectedVariantExamples = $examplesFollowVariant ? $productExamples->where('product_variant_id', $session->product_variant_id)->values() : $productExamples)
+            @php($surfaceColours = $bottleVariants->mapWithKeys(fn ($variant) => [$variant->id => $session->product->preview_configuration['design_surfaces_by_variant'][strtolower($variant->options['colour'] ?? '')] ?? '#f4efe7']))
+            @php($designWidth = $selectedDesign?->width ?? 6)
+            @php($designHeight = $selectedDesign?->height ?? 5)
+            @php($designNegativeMargin = ($designHeight / max(1, $designWidth)) * 100)
+            @php($characterConfig = $session->product->designTemplate?->definition()['character'] ?? ['x' => .5, 'y' => .5, 'max_width' => .36, 'max_height' => .84])
             @php($savedName = collect($session->personalisation_snapshot)->firstWhere('key', 'name')['value'] ?? '')
 
             <div class="mt-8 grid gap-10 lg:grid-cols-[1fr_.72fr]" x-data="designWorkspace(@js([
                 'previewMode' => $templated ? 'design' : 'artwork',
-                'exampleUrl' => $productExamples->first()?->url(),
-                'exampleAlt' => $productExamples->first()?->alt_text ?? 'Product example',
+                'exampleUrl' => $selectedVariantExamples->first()?->url(),
+                'exampleAlt' => $selectedVariantExamples->first()?->alt_text ?? 'Product example',
+                'variantExamples' => $productExamples->groupBy('product_variant_id')->map(fn ($images) => $images->map(fn ($image) => ['url' => $image->url(), 'alt' => $image->alt_text])->values())->all(),
+                'examplesFollowVariant' => $examplesFollowVariant,
+                'variantSurfaces' => $surfaceColours,
+                'surfaceColour' => $surfaceColours->get($session->product_variant_id, '#f4efe7'),
+                'characterX' => (float) ($characterConfig['x'] ?? .5),
+                'characterY' => (float) ($characterConfig['y'] ?? .5),
+                'characterWidth' => (float) ($characterConfig['max_width'] ?? .36),
+                'characterHeight' => (float) ($characterConfig['max_height'] ?? .84),
                 'selectedDesignUrl' => $selectedDesign ? route('artwork.designs', [$session->public_id, $selectedDesign]) : null,
                 'selectedLayoutUrl' => $selectedDesign ? route('artwork.design-layout', [$session->public_id, $selectedDesign]) : null,
                 'editorBackgroundUrl' => $selectedDesign?->editor_background_storage_key ? route('artwork.design-editor-background', [$session->public_id, $selectedDesign]) : null,
@@ -77,18 +93,18 @@
                     @endif
 
                     @if($selectedDesign)
-                        <div x-show="previewMode === 'design'" x-ref="editorCanvas" class="relative aspect-[6/5] overflow-hidden rounded-[2.5rem] bg-sand shadow-2xl">
+                        <div x-show="previewMode === 'design'" x-ref="editorCanvas" class="relative overflow-hidden rounded-[2.5rem]" style="aspect-ratio: {{ $designWidth }} / {{ $designHeight }}" :style="`aspect-ratio: {{ $designWidth }} / {{ $designHeight }}; background-color: ${surfaceColour}`">
                             <img x-show="!editable" :src="selectedDesignUrl" alt="Your flat bottle print design" class="h-full w-full object-contain">
                             <template x-if="editable">
                                 <div class="absolute inset-0">
                                     <img :src="editorBackgroundUrl" alt="Your personalised bottle background" class="h-full w-full object-contain">
-                                    <div class="absolute overflow-visible" style="left:32%; top:9%; width:36%; height:84%">
+                                    <div class="absolute overflow-visible" style="left:{{ (($characterConfig['x'] ?? .5) - (($characterConfig['max_width'] ?? .36) / 2)) * 100 }}%; top:{{ (($characterConfig['y'] ?? .5) - (($characterConfig['max_height'] ?? .84) / 2)) * 100 }}%; width:{{ ($characterConfig['max_width'] ?? .36) * 100 }}%; height:{{ ($characterConfig['max_height'] ?? .84) * 100 }}%">
                                         <div class="absolute inset-0 overflow-hidden">
-                                            <div class="absolute" :style="`left:${50 + (offsetX / .36 * 100)}%; top:${50 + (offsetY / .84 * 100)}%; width:${scale * 100}%; height:${scale * 100}%; transform:translate(-50%,-50%)`">
+                                            <div class="absolute" :style="`left:${50 + (offsetX / characterWidth * 100)}%; top:${50 + (offsetY / characterHeight * 100)}%; width:${scale * 100}%; height:${scale * 100}%; transform:translate(-50%,-50%)`">
                                                 <img :src="characterUrl" alt="Your AI character" class="pointer-events-none h-full w-full select-none object-contain">
                                             </div>
                                         </div>
-                                        <div @pointerdown.prevent="beginTransform($event, 'move')" class="absolute cursor-move touch-none border-2 border-dashed border-white/90" :style="`left:${50 + (offsetX / .36 * 100)}%; top:${50 + (offsetY / .84 * 100)}%; width:${scale * 100}%; height:${scale * 100}%; transform:translate(-50%,-50%)`">
+                                        <div @pointerdown.prevent="beginTransform($event, 'move')" class="absolute cursor-move touch-none border-2 border-dashed border-white/90" :style="`left:${50 + (offsetX / characterWidth * 100)}%; top:${50 + (offsetY / characterHeight * 100)}%; width:${scale * 100}%; height:${scale * 100}%; transform:translate(-50%,-50%)`">
                                             <template x-for="corner in ['nw', 'ne', 'sw', 'se']">
                                                 <button type="button" @pointerdown.stop.prevent="beginTransform($event, 'scale')" :class="{'-left-2 -top-2': corner === 'nw', '-right-2 -top-2': corner === 'ne', '-bottom-2 -left-2': corner === 'sw', '-bottom-2 -right-2': corner === 'se'}" class="absolute h-4 w-4 cursor-nwse-resize rounded-full border-2 border-white bg-coral shadow" aria-label="Resize character"></button>
                                             </template>
@@ -102,29 +118,29 @@
                             <div x-show="savingLayout" class="absolute inset-x-0 bottom-3 mx-auto w-max rounded-full bg-ink/80 px-3 py-1 text-xs text-white">Saving…</div>
                         </div>
                         <template x-if="editable">
-                            <div x-show="previewMode === 'design'" class="pointer-events-none relative -mt-[83.333%] aspect-[6/5]">
-                                <button type="button" @pointerdown.stop.prevent="beginTransform($event, 'scale')" class="pointer-events-auto absolute z-20 h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-white bg-coral shadow" :style="`left:${50 + (offsetX * 100) - (18 * scale)}%; top:${51 + (offsetY * 100)}%`" aria-label="Resize character from left"></button>
-                                <button type="button" @pointerdown.stop.prevent="beginTransform($event, 'scale')" class="pointer-events-auto absolute z-20 h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-white bg-coral shadow" :style="`left:${50 + (offsetX * 100) + (18 * scale)}%; top:${51 + (offsetY * 100)}%`" aria-label="Resize character from right"></button>
+                            <div x-show="previewMode === 'design'" class="pointer-events-none relative" style="margin-top: -{{ $designNegativeMargin }}%; aspect-ratio: {{ $designWidth }} / {{ $designHeight }}">
+                                <button type="button" @pointerdown.stop.prevent="beginTransform($event, 'scale')" class="pointer-events-auto absolute z-20 h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-white bg-coral shadow" :style="`left:${(characterX + offsetX - (characterWidth * scale / 2)) * 100}%; top:${(characterY + offsetY) * 100}%`" aria-label="Resize character from left"></button>
+                                <button type="button" @pointerdown.stop.prevent="beginTransform($event, 'scale')" class="pointer-events-auto absolute z-20 h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-white bg-coral shadow" :style="`left:${(characterX + offsetX + (characterWidth * scale / 2)) * 100}%; top:${(characterY + offsetY) * 100}%`" aria-label="Resize character from right"></button>
                             </div>
                         </template>
                     @endif
 
                     @if(!$templated && $artworkPreview)
-                        <div x-show="previewMode === 'artwork'" class="aspect-[6/5] overflow-hidden rounded-[2.5rem] bg-sand shadow-2xl">
+                        <div x-show="previewMode === 'artwork'" class="overflow-hidden rounded-[2.5rem] bg-sand shadow-2xl" style="aspect-ratio: {{ $designWidth }} / {{ $designHeight }}">
                             <img src="{{ route('artwork.assets', [$session->public_id, $artworkPreview]) }}" alt="Your generated AI artwork" class="h-full w-full object-contain">
                         </div>
                     @endif
 
                     @if($productExamples->isNotEmpty())
-                        <div x-show="previewMode === 'product'" class="aspect-[6/5] overflow-hidden rounded-[2.5rem] bg-white shadow-2xl">
+                        <div x-show="previewMode === 'product'" class="overflow-hidden rounded-[2.5rem] bg-white" style="aspect-ratio: {{ $designWidth }} / {{ $designHeight }}">
                             <img :src="exampleUrl" :alt="exampleAlt" class="h-full w-full object-contain">
                         </div>
                         <div class="mt-6">
-                            <p class="text-sm font-bold text-ink">Bottle examples</p>
-                            <p class="mt-1 text-xs text-muted">Official Prodigi product photography. These are not personalised mockups.</p>
+                            <p class="text-sm font-bold text-ink">Product examples</p>
+                            <p class="mt-1 text-xs text-muted">Personalised examples shown for inspiration.</p>
                             <div class="mt-3 flex flex-wrap gap-3">
                                 @foreach($productExamples as $image)
-                                    <button type="button" @click="previewMode = 'product'; exampleUrl = @js($image->url()); exampleAlt = @js($image->alt_text)" class="cursor-pointer overflow-hidden rounded-xl bg-white ring-2 ring-transparent focus:ring-coral" :class="previewMode === 'product' && exampleUrl === @js($image->url()) ? 'ring-coral' : ''">
+                                    <button type="button" x-show="!examplesFollowVariant || selectedVariantId === @js($image->product_variant_id)" @click="previewMode = 'product'; exampleUrl = @js($image->url()); exampleAlt = @js($image->alt_text)" class="cursor-pointer overflow-hidden rounded-xl bg-white ring-2 ring-transparent focus:ring-coral" :class="previewMode === 'product' && exampleUrl === @js($image->url()) ? 'ring-coral' : ''">
                                         <img src="{{ $image->url() }}" alt="{{ $image->alt_text }}" class="h-24 w-28 object-cover">
                                     </button>
                                 @endforeach
@@ -161,7 +177,7 @@
                                     @php($colourLabel = strtolower($variant->options['colour'] ?? '') === 'grey' ? 'Gray' : str($variant->options['colour'] ?? '')->title())
                                     <label class="selection-card min-w-0" :class="changingColour ? 'pointer-events-none opacity-60' : ''">
                                         <input class="sr-only" type="radio" name="preview_variant_id" value="{{ $variant->id }}" :checked="selectedVariantId === @js($variant->id)" @change="chooseVariant(@js($variant->id))" :disabled="changingColour">
-                                        <span><strong class="block">{{ $colourLabel }}</strong><small class="block">650 ml</small><small class="block">{{ $variant->formattedPrice() }}</small></span>
+                                        <span><strong class="block">{{ $colourLabel }}</strong><small class="block">{{ str($variant->options['size'] ?? '')->replace('ml', ' ml') }}</small><small class="block">{{ $variant->formattedPrice() }}</small></span>
                                     </label>
                                 @endforeach
                             </div>
@@ -321,7 +337,9 @@ document.addEventListener('alpine:init', () => {
         async chooseVariant(variantId) {
             if (variantId === this.selectedVariantId || this.changingColour || this.updatingName) return;
             const previousVariantId = this.selectedVariantId;
+            const previousSurfaceColour = this.surfaceColour;
             this.selectedVariantId = variantId;
+            this.surfaceColour = this.variantSurfaces[variantId] || '#f4efe7';
             this.previewMode = 'design';
             this.changingColour = true;
             this.colourError = '';
@@ -345,8 +363,14 @@ document.addEventListener('alpine:init', () => {
                 this.selectedDesignUrl = nextPreviewUrl;
                 this.selectedLayoutUrl = data.layout_url;
                 this.editorBackgroundUrl = nextBackgroundUrl;
+                if (this.examplesFollowVariant) {
+                    const firstExample = this.variantExamples[variantId]?.[0];
+                    this.exampleUrl = firstExample?.url || null;
+                    this.exampleAlt = firstExample?.alt || 'Product example';
+                }
             } catch (error) {
                 this.selectedVariantId = previousVariantId;
+                this.surfaceColour = previousSurfaceColour;
                 this.colourError = error.message || 'We could not update that colour. Please try again.';
             } finally {
                 this.changingColour = false;

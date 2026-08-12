@@ -67,8 +67,8 @@ class FakeEndToEndJourneyTest extends TestCase
         Storage::fake('public');
         $this->seed(CatalogueSeeder::class);
         config(['queue.default' => 'sync', 'artwork.provider' => 'fake', 'artwork.fake_failure' => false, 'payments.provider' => 'fake', 'payments.fake.enabled' => true]);
-        $product = Product::query()->where('slug', 'cattie-water-bottle')->with(['variants', 'artworkStyles'])->firstOrFail();
-        $variant = $product->variants->first(fn ($candidate) => $candidate->options['colour'] === 'black');
+        $product = Product::query()->where('slug', 'water-bottle-with-red-flip-lid')->with(['variants', 'artworkStyles'])->firstOrFail();
+        $variant = $product->variants->first(fn ($candidate) => $candidate->options['colour'] === 'white');
         $style = $product->artworkStyles->first();
         [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation' => ['name' => 'Maria']], 'bottle-owner');
 
@@ -76,7 +76,7 @@ class FakeEndToEndJourneyTest extends TestCase
         $session->refresh();
         $design = $session->composedDesigns()->firstOrFail();
         $asset = $design->generationAsset;
-        $this->assertSame([2750, 2279], [$design->width, $design->height]);
+        $this->assertSame([2717, 2008], [$design->width, $design->height]);
         $this->withCookie('cattie_guest_token', 'bottle-owner')->post(route('artwork.approve', $session->public_id), ['asset_id' => $asset->id, 'design_id' => $design->id])->assertRedirect();
         $this->withCookie('cattie_guest_token', 'bottle-owner')->post(route('artwork.cart', $session->public_id))->assertRedirect(route('cart.index'));
         $cart = Cart::query()->firstOrFail();

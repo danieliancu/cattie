@@ -76,11 +76,11 @@
         </div>
         <div>
             <h2 class="text-xs font-bold uppercase tracking-[.16em] text-ink">About Us</h2>
-            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted"><li>About Cattie</li><li>Contact us</li><li>Terms and Conditions</li><li>Blog</li><li>Sitemap</li></ul>
+            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted"><li>About Cattie</li><li>Contact us</li><li><a class="hover:text-coral" href="{{ route('information.terms') }}">Terms and Conditions</a></li><li>Blog</li><li>Sitemap</li></ul>
         </div>
         <div>
             <h2 class="text-xs font-bold uppercase tracking-[.16em] text-ink">Customer Service</h2>
-            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted"><li>FAQ</li><li>Delivery &amp; Shipping</li><li>Returns Policy</li><li>Privacy Policy</li><li>Payment Methods</li></ul>
+            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted"><li><a class="hover:text-coral" href="{{ route('information.faq') }}">FAQ</a></li><li><a class="hover:text-coral" href="{{ route('information.delivery') }}">Delivery &amp; Shipping</a></li><li><a class="hover:text-coral" href="{{ route('information.returns') }}">Returns Policy</a></li><li><a class="hover:text-coral" href="{{ route('information.privacy') }}">Privacy Policy</a></li><li><a class="hover:text-coral" href="{{ route('information.payments') }}">Payment Methods</a></li></ul>
         </div>
         <div>
             <h2 class="text-xs font-bold uppercase tracking-[.16em] text-ink">Contact Us</h2>

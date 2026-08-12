@@ -25,7 +25,7 @@ class RenderComposedDesign
 
         $definition = $template->definition();
         $printArea = $definition['output_size']['print_area'] ?? 'default';
-        $size = $session->variant->requiredPrintResolution('prodigi', $printArea);
+        $size = $session->variant->requiredPrintResolution($printArea);
         $personalisation = collect($session->personalisation_snapshot)->keyBy('key');
         $sourceBytes = Storage::disk($asset->disk)->get($asset->storage_key);
         $source = $sourceBytes === null ? false : @imagecreatefromstring($sourceBytes);
@@ -39,6 +39,10 @@ class RenderComposedDesign
             imagedestroy($source);
             throw new RuntimeException('The design canvas could not be created.');
         }
+        imagealphablending($canvas, false);
+        imagesavealpha($canvas, true);
+        imagefill($canvas, 0, 0, imagecolorallocatealpha($canvas, 0, 0, 0, 127));
+        imagealphablending($canvas, true);
 
         try {
             $editorBackgroundBytes = null;
@@ -47,6 +51,7 @@ class RenderComposedDesign
                     $editorBackgroundBytes = $this->previewBytes($canvas);
                 }
                 match ($layer['type'] ?? null) {
+                    'transparent' => $this->renderTransparent($canvas),
                     'solid' => $this->renderSolid($canvas, $layer, $session->variant->options ?? []),
                     'personalisation_text_pattern' => $this->renderTextPattern($canvas, $layer, $definition, $personalisation->all(), $template),
                     'generation_asset' => $this->renderGenerationAsset($canvas, $source, $layer, $definition[$layer['config'] ?? ''] ?? [], $characterAdjustments),
@@ -145,6 +150,14 @@ class RenderComposedDesign
             $colour = $layer['colours_by_variant'][$value] ?? $layer['fallback_colour'] ?? null;
         }
         imagefill($canvas, 0, 0, $this->colour($canvas, $colour ?? '#ffffff'));
+    }
+
+    private function renderTransparent(\GdImage $canvas): void
+    {
+        imagealphablending($canvas, false);
+        imagefill($canvas, 0, 0, imagecolorallocatealpha($canvas, 0, 0, 0, 127));
+        imagesavealpha($canvas, true);
+        imagealphablending($canvas, true);
     }
 
     private function renderTextPattern(\GdImage $canvas, array $layer, array $definition, array $personalisation, ProductDesignTemplate $template): void
@@ -370,6 +383,9 @@ class RenderComposedDesign
         $width = max(1, (int) round(imagesx($canvas) * $scale));
         $height = max(1, (int) round(imagesy($canvas) * $scale));
         $preview = imagecreatetruecolor($width, $height);
+        imagealphablending($preview, false);
+        imagesavealpha($preview, true);
+        imagefill($preview, 0, 0, imagecolorallocatealpha($preview, 0, 0, 0, 127));
         imagecopyresampled($preview, $canvas, 0, 0, 0, 0, $width, $height, imagesx($canvas), imagesy($canvas));
         ob_start();
         imagewebp($preview, null, 86);

@@ -34,7 +34,7 @@ class ComposedDesignTest extends TestCase
 
     public function test_variant_dimensions_are_exact_and_preview_is_smaller_and_private(): void
     {
-        foreach (['black' => [2750, 2279], 'grey' => [2750, 2279], 'navy' => [2750, 2279], 'red' => [2750, 2279]] as $colour => [$width, $height]) {
+        foreach (['white' => [2717, 2008], 'silver' => [2717, 2008]] as $colour => [$width, $height]) {
             [$session, $asset] = $this->inputs($colour);
             $design = app(RenderComposedDesign::class)->handle($session, $asset);
             $this->assertSame([$width, $height], [$design->width, $design->height]);
@@ -46,9 +46,9 @@ class ComposedDesignTest extends TestCase
         }
     }
 
-    public function test_missing_prodigi_resolution_fails_without_a_universal_fallback(): void
+    public function test_missing_active_resolution_fails_without_a_universal_fallback(): void
     {
-        [$session, $asset] = $this->inputs('black');
+        [$session, $asset] = $this->inputs('white');
         $session->variant->fulfilmentMappings()->delete();
 
         $this->expectException(DomainException::class);
@@ -65,14 +65,17 @@ class ComposedDesignTest extends TestCase
         $this->assertLessThanOrEqual(1914, $size['height']);
     }
 
-    public function test_bottle_colour_selects_the_exact_flat_background_theme(): void
+    public function test_treatpod_print_png_is_transparent_for_both_substrates(): void
     {
-        foreach (['black' => '#17191f', 'grey' => '#777d86', 'navy' => '#18558b', 'red' => '#bd2738'] as $colour => $expected) {
+        foreach (['white', 'silver'] as $colour) {
             [$session, $asset] = $this->inputs($colour);
             $design = app(RenderComposedDesign::class)->handle($session, $asset);
             $image = imagecreatefromstring(Storage::disk('local')->get($design->storage_key));
-            $this->assertSame(hexdec(substr($expected, 1)), imagecolorat($image, 0, 0) & 0xFFFFFF, "Unexpected background for {$colour}.");
+            $this->assertSame(127, (imagecolorat($image, 0, 0) >> 24) & 0x7F, "The {$colour} substrate must not be baked into the print PNG.");
             imagedestroy($image);
+            $editorBackground = imagecreatefromstring(Storage::disk('local')->get($design->editor_background_storage_key));
+            $this->assertSame(127, (imagecolorat($editorBackground, 0, 0) >> 24) & 0x7F, "The {$colour} preview surface must remain browser-only.");
+            imagedestroy($editorBackground);
         }
     }
 
@@ -101,14 +104,13 @@ class ComposedDesignTest extends TestCase
 
     public function test_alpha_artwork_and_repeated_name_are_composed(): void
     {
-        [$session, $asset] = $this->inputs('black');
+        [$session, $asset] = $this->inputs('white');
         $design = app(RenderComposedDesign::class)->handle($session, $asset);
         $image = imagecreatefromstring(Storage::disk('local')->get($design->storage_key));
-        $pink = imagecolorat($image, 0, 0) & 0xFFFFFF;
         $differentPixels = 0;
         for ($x = 300; $x < 700; $x += 40) {
             for ($y = 300; $y < 1800; $y += 60) {
-                $differentPixels += ((imagecolorat($image, $x, $y) & 0xFFFFFF) !== $pink) ? 1 : 0;
+                $differentPixels += (((imagecolorat($image, $x, $y) >> 24) & 0x7F) < 127) ? 1 : 0;
             }
         }
         imagedestroy($image);
@@ -117,7 +119,7 @@ class ComposedDesignTest extends TestCase
 
     public function test_mixed_typography_is_offline_deterministic_and_clipped_to_the_safe_zone(): void
     {
-        [$session, $asset] = $this->inputs('black');
+        [$session, $asset] = $this->inputs('white');
         $session->update(['personalisation_snapshot' => [['key' => 'name', 'label' => 'Name', 'type' => 'text', 'value' => 'María-Andreea Foarte Lung']]]);
         $renderer = app(RenderComposedDesign::class);
         $template = $session->product->designTemplate;
@@ -136,7 +138,7 @@ class ComposedDesignTest extends TestCase
 
     public function test_v4_typography_is_offline_deterministic_and_clipped_to_the_safe_zone(): void
     {
-        [$session, $asset] = $this->inputs('black');
+        [$session, $asset] = $this->inputs('white');
         $session->update(['personalisation_snapshot' => [['key' => 'name', 'label' => 'Name', 'type' => 'text', 'value' => 'María Rose']]]);
         $renderer = app(RenderComposedDesign::class);
 
@@ -145,26 +147,26 @@ class ComposedDesignTest extends TestCase
         $firstBytes = Storage::disk('local')->get($first->storage_key);
         $this->assertSame(hash('sha256', $firstBytes), hash('sha256', Storage::disk('local')->get($second->storage_key)));
         $image = imagecreatefromstring($firstBytes);
-        $pink = imagecolorat($image, 0, 0) & 0xFFFFFF;
-        foreach ([[10, 10], [2740, 10], [10, 2269], [2740, 2269]] as [$x, $y]) {
-            $this->assertSame($pink, imagecolorat($image, $x, $y) & 0xFFFFFF);
+        foreach ([[10, 10], [2707, 10], [10, 1998], [2707, 1998]] as [$x, $y]) {
+            $this->assertSame(127, (imagecolorat($image, $x, $y) >> 24) & 0x7F);
         }
         imagedestroy($image);
     }
 
-    public function test_artwork_page_uses_prodigi_examples_and_has_no_design_history(): void
+    public function test_artwork_page_uses_variant_specific_supplier_examples_and_has_no_design_history(): void
     {
-        [$session, $firstAsset] = $this->inputs('black', 'gallery-owner');
+        [$session, $firstAsset] = $this->inputs('white', 'gallery-owner');
         $renderer = app(RenderComposedDesign::class);
         $renderer->handle($session, $firstAsset);
         $renderer->handle($session, $firstAsset);
 
         $response = $this->withCookie('cattie_guest_token', 'gallery-owner')->get(route('products.show', $session->product->slug));
-        $response->assertOk()->assertSee('Your bottle design')->assertSee('Product')->assertDontSee('Artwork only')->assertDontSee('Try another version')->assertSee('Bottle colour')->assertSee('Bottle examples')->assertSee('Official Prodigi product photography')->assertDontSee('Previous designs')
-            ->assertSee('About your gift')->assertSee('99 Day')->assertSee('Secure')->assertSee('Privacy')
-            ->assertSee('Shipping &amp; Returns', false)->assertSee('99 Days Return')->assertSee('Delivery');
-        $response->assertSee("previewMode = 'product'; exampleUrl =", false)->assertSee('aspect-[6/5]', false);
-        foreach (['catalogue/bottle01.jpg', 'catalogue/bottle02.jpg', 'catalogue/close-up.jpg', 'catalogue/lid.jpg'] as $path) {
+        $response->assertOk()->assertSee('Your bottle design')->assertSee('Product')->assertDontSee('Artwork only')->assertDontSee('Try another version')->assertSee('Bottle colour')->assertSee('Product examples')->assertSee('Personalised examples shown for inspiration.')->assertDontSee('Prodigi')->assertDontSee('Previous designs')
+            ->assertSee('About your gift')->assertSee('Made')->assertSee('For You')->assertSee('Secure')->assertSee('Privacy')
+            ->assertSee('Shipping &amp; Returns', false)->assertSee('Personalised Item Returns')->assertSee('Delivery')
+            ->assertSee('Royal Mail Tracked 48')->assertDontSee('99 Day');
+        $response->assertSee("previewMode = 'product'; exampleUrl =", false)->assertSee('aspect-ratio: 2717 / 2008', false)->assertDontSee('aspect-[6/5]', false);
+        foreach (['anna-product.png', 'anna-school.png', 'anna-home.png', 'anna-street.png', 'adrian-product.png'] as $path) {
             $response->assertSee($path, false);
         }
 
@@ -179,10 +181,10 @@ class ComposedDesignTest extends TestCase
         $history->assertOk()->assertDontSee('Previous designs')->assertDontSee('Adjust your character')
             ->assertSee('selectedDesignUrl', false)->assertSee('selectedDesignId', false)
             ->assertDontSee('action="'.route('artwork.approve', $session->public_id).'"', false);
-        foreach (['Black', 'Gray', 'Navy', 'Red'] as $name) {
+        foreach (['White', 'Silver'] as $name) {
             $history->assertSee($name);
         }
-        $history->assertSee('<small class="block">650 ml</small><small class="block">£16.50</small>', false);
+        $history->assertSee('<small class="block">750 ml</small><small class="block">£16.50</small>', false);
 
         $this->withCookie('cattie_guest_token', 'gallery-owner')->post(route('artwork.change', $session->public_id), ['design_id' => $secondDesign->id])->assertRedirect();
         $this->assertSame($secondGeneration->id, $session->fresh()->current_generation_id);
@@ -199,15 +201,15 @@ class ComposedDesignTest extends TestCase
 
     public function test_history_regeneration_variant_change_and_approval_keep_both_facts(): void
     {
-        [$session, $firstAsset] = $this->inputs('black');
+        [$session, $firstAsset] = $this->inputs('white');
         $first = app(RenderComposedDesign::class)->handle($session, $firstAsset);
         $second = app(RenderComposedDesign::class)->handle($session, $firstAsset);
         $this->assertNotSame($first->id, $second->id);
 
-        $lime = $session->product->variants->first(fn ($variant) => $variant->options['colour'] === 'red');
-        $session->update(['product_variant_id' => $lime->id]);
+        $silver = $session->product->variants->first(fn ($variant) => $variant->options['colour'] === 'silver');
+        $session->update(['product_variant_id' => $silver->id]);
         $limeDesign = app(RenderComposedDesign::class)->handle($session->fresh(), $firstAsset);
-        $this->assertSame([2750, 2279], [$limeDesign->width, $limeDesign->height]);
+        $this->assertSame([2717, 2008], [$limeDesign->width, $limeDesign->height]);
         $this->assertDatabaseCount('composed_designs', 3);
 
         app(ApproveArtwork::class)->handle($session->fresh(), $firstAsset, $limeDesign);
@@ -219,7 +221,7 @@ class ComposedDesignTest extends TestCase
 
     public function test_template_product_cart_requires_and_snapshots_approved_design(): void
     {
-        [$session, $asset] = $this->inputs('black');
+        [$session, $asset] = $this->inputs('white');
         $cart = Cart::query()->create(['status' => 'active', 'currency' => 'GBP']);
         $session->update(['status' => ArtworkSessionStatus::Approved, 'approved_generation_asset_id' => $asset->id]);
         $asset->update(['is_selected' => true]);
@@ -239,7 +241,7 @@ class ComposedDesignTest extends TestCase
 
     public function test_design_preview_has_same_ownership_boundary_as_ai_assets(): void
     {
-        [$session, $asset] = $this->inputs('black', 'owner-token');
+        [$session, $asset] = $this->inputs('white', 'owner-token');
         $design = app(RenderComposedDesign::class)->handle($session, $asset);
         $this->withCookie('cattie_guest_token', 'intruder')->get(route('artwork.designs', [$session->public_id, $design]))->assertNotFound();
         $response = $this->withCookie('cattie_guest_token', 'owner-token')->get(route('artwork.designs', [$session->public_id, $design]));
@@ -249,7 +251,7 @@ class ComposedDesignTest extends TestCase
 
     public function test_character_layout_editor_rerenders_without_ai_and_is_private(): void
     {
-        [$session, $asset] = $this->inputs('black', 'layout-owner');
+        [$session, $asset] = $this->inputs('white', 'layout-owner');
         $design = app(RenderComposedDesign::class)->handle($session, $asset);
         $payload = ['scale' => 1.35, 'offset_x' => .12, 'offset_y' => -.08];
 
@@ -306,7 +308,7 @@ class ComposedDesignTest extends TestCase
 
     public function test_change_artwork_from_basket_returns_cattie_to_the_editable_design_workspace(): void
     {
-        [$session, $asset] = $this->inputs('black', 'basket-editor');
+        [$session, $asset] = $this->inputs('white', 'basket-editor');
         $design = app(RenderComposedDesign::class)->handle($session, $asset, ['scale' => 1.2, 'offset_x' => .05, 'offset_y' => -.03]);
 
         $this->withCookie('cattie_guest_token', 'basket-editor')->post(route('artwork.cart', $session->public_id), [
@@ -328,7 +330,7 @@ class ComposedDesignTest extends TestCase
 
     private function inputs(string $colour, string $token = 'owner-token'): array
     {
-        $product = Product::query()->where('slug', 'cattie-water-bottle')->with(['variants', 'artworkStyles'])->firstOrFail();
+        $product = Product::query()->where('slug', 'water-bottle-with-red-flip-lid')->with(['variants', 'artworkStyles'])->firstOrFail();
         $variant = $product->variants->first(fn ($variant) => $variant->options['colour'] === $colour);
         $style = $product->artworkStyles->first();
         [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation' => ['name' => 'Maria']], $token);

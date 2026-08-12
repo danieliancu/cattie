@@ -47,14 +47,14 @@ class ProductVariant extends Model
     }
 
     /** @return array{width: int, height: int} */
-    public function requiredPrintResolution(string $provider, string $printArea = 'default'): array
+    public function requiredPrintResolution(string $printArea = 'default'): array
     {
-        $mapping = $this->fulfilmentMappings()->where('provider', $provider)->where('is_active', true)->first();
+        $mappings = $this->fulfilmentMappings()->where('is_active', true)->get();
 
-        if (! $mapping) {
-            throw new DomainException("Active fulfilment mapping [{$provider}] is missing for product variant [{$this->id}].");
+        if ($mappings->count() !== 1) {
+            throw new DomainException("Product variant [{$this->id}] must have exactly one active fulfilment mapping; [{$mappings->count()}] found.");
         }
 
-        return $mapping->requiredPrintResolution($printArea);
+        return $mappings->first()->requiredPrintResolution($printArea);
     }
 }
