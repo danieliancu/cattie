@@ -161,7 +161,7 @@ class ComposedDesignTest extends TestCase
         $renderer->handle($session, $firstAsset);
 
         $response = $this->withCookie('cattie_guest_token', 'gallery-owner')->get(route('products.show', $session->product->slug));
-        $response->assertOk()->assertSee('Your bottle design')->assertSee('Product')->assertDontSee('Artwork only')->assertDontSee('Try another version')->assertSee('Bottle colour')->assertSee('Product examples')->assertSee('Personalised examples shown for inspiration.')->assertDontSee('Prodigi')->assertDontSee('Previous designs')
+        $response->assertOk()->assertSee('Water Bottle with Red Flip Lid')->assertSee('A personalised 750 ml aluminium bottle with a bright red flip lid, made unique with their name and artwork.')->assertSee('Design')->assertSee('Product')->assertDontSee('Artwork only')->assertDontSee('Try another version')->assertSee('Bottle colour')->assertSee('Product examples')->assertSee('Personalised examples shown for inspiration.')->assertDontSee('Prodigi')->assertDontSee('Previous designs')
             ->assertSee('About your gift')->assertSee('Made')->assertSee('For You')->assertSee('Secure')->assertSee('Privacy')
             ->assertSee('Shipping &amp; Returns', false)->assertSee('personalised items are made to order')->assertSee('Delivery times are estimates')
             ->assertSee('Made and printed in the UK')->assertSee('Royal Mail 48 Tracked')->assertDontSee('99 Day');
@@ -253,7 +253,7 @@ class ComposedDesignTest extends TestCase
     {
         [$session, $asset] = $this->inputs('white', 'layout-owner');
         $design = app(RenderComposedDesign::class)->handle($session, $asset);
-        $payload = ['scale' => 1.35, 'offset_x' => .12, 'offset_y' => -.08];
+        $payload = ['scale' => 1.35, 'offset_x' => .45, 'offset_y' => -.38];
 
         $response = $this->withCookie('cattie_guest_token', 'layout-owner')->post(route('artwork.design-layout', [$session->public_id, $design]), $payload, ['Accept' => 'application/json']);
 
@@ -266,9 +266,11 @@ class ComposedDesignTest extends TestCase
 
         $page = $this->withCookie('cattie_guest_token', 'layout-owner')->get(route('products.show', $session->product->slug));
         $page->assertOk()->assertDontSee('Adjust your character')->assertDontSee('Drag the rectangle to move.')
-            ->assertSee('Resize character')->assertSee('Resize character from left')->assertSee('Resize character from right')
+            ->assertSee('Resize character')->assertSee('x-ref="characterZone"', false)->assertDontSee('Drag to move')
             ->assertDontSee('Previous designs')->assertSee('Bottle colour')
-            ->assertSee('x-show="previewMode === \'design\'" class="pointer-events-none relative', false)
+            ->assertDontSee('Resize character from left')->assertDontSee('Math.min(1.8', false)
+            ->assertSee("transformMode === 'move' ? 'cursor-grabbing' : 'cursor-grab'", false)
+            ->assertDontSee('Math.min(maxOffset', false)
             ->assertSee('beginTransform($event, \'move\')', false)->assertSee('async chooseVariant(variantId)', false);
 
         $nextVariant = $session->product->variants->first(fn ($variant) => $variant->is_active && $variant->id !== $session->product_variant_id);
@@ -276,13 +278,14 @@ class ComposedDesignTest extends TestCase
             'variant_id' => $nextVariant->id,
             'design_id' => $updated->id,
         ], ['Accept' => 'application/json']);
-        $colourResponse->assertOk()->assertJsonStructure(['variant_id', 'design_id', 'preview_url', 'layout_url', 'background_url']);
+        $colourResponse->assertOk()->assertJsonStructure(['variant_id', 'surface_colour', 'design_id', 'asset_id', 'preview_url', 'layout_url', 'background_url']);
         $colourDesign = ComposedDesign::query()->findOrFail($colourResponse->json('design_id'));
+        $this->assertSame($nextVariant->id, $colourDesign->product_variant_id);
         $this->assertSame($payload, $colourDesign->character_adjustments);
 
         $nameResponse = $this->withCookie('cattie_guest_token', 'layout-owner')->post(route('artwork.name', $session->public_id), [
             'name' => 'Mia Rose',
-            'design_id' => $colourDesign->id,
+            'design_id' => $updated->id,
         ], ['Accept' => 'application/json']);
         $nameResponse->assertOk()->assertJsonStructure(['name', 'design_id', 'preview_url', 'layout_url', 'background_url']);
         $nameDesign = ComposedDesign::query()->findOrFail($nameResponse->json('design_id'));
@@ -292,7 +295,10 @@ class ComposedDesignTest extends TestCase
 
         $updatedPage = $this->withCookie('cattie_guest_token', 'layout-owner')->get(route('products.show', $session->product->slug));
         $updatedPage->assertOk()->assertSee('x-model="nameValue"', false)->assertSee('Mia Rose', false)
-            ->assertSee('@input="scheduleNameUpdate()"', false)->assertSee('12 - nameValue.length', false);
+            ->assertSee('@click="updateName()"', false)->assertSee('aria-label="Apply name"', false)
+            ->assertDontSee('@input="scheduleNameUpdate()"', false)->assertSee('12 - nameValue.length', false)
+            ->assertDontSee('<p class="eyebrow text-center">', false)
+            ->assertDontSee('<p class="eyebrow">Storybook Cartoon</p>', false);
 
         $emptyNameResponse = $this->withCookie('cattie_guest_token', 'layout-owner')->post(route('artwork.name', $session->public_id), [
             'name' => '',
@@ -310,12 +316,22 @@ class ComposedDesignTest extends TestCase
     {
         [$session, $asset] = $this->inputs('white', 'basket-editor');
         $design = app(RenderComposedDesign::class)->handle($session, $asset, ['scale' => 1.2, 'offset_x' => .05, 'offset_y' => -.03]);
+        $nextVariant = $session->product->variants->first(fn ($variant) => $variant->is_active && $variant->id !== $session->product_variant_id);
+        $designCount = $session->composedDesigns()->count();
+        $this->withCookie('cattie_guest_token', 'basket-editor')->post(route('artwork.variant', $session->public_id), [
+            'variant_id' => $nextVariant->id,
+            'design_id' => $design->id,
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->assertSame($designCount + 1, $session->composedDesigns()->count());
 
         $this->withCookie('cattie_guest_token', 'basket-editor')->post(route('artwork.cart', $session->public_id), [
             'asset_id' => $asset->id,
             'design_id' => $design->id,
         ])->assertRedirect(route('cart.index'));
         $item = Cart::query()->firstOrFail()->items()->firstOrFail();
+        $this->assertSame($nextVariant->id, $item->product_variant_id);
+        $this->assertSame($nextVariant->id, $item->composedDesign->product_variant_id);
+        $this->assertSame(['scale' => 1.2, 'offset_x' => .05, 'offset_y' => -.03], $item->composedDesign->character_adjustments);
 
         $this->withCookie('cattie_guest_token', 'basket-editor')->post(route('cart.change-artwork', $item))
             ->assertRedirect(route('products.show', $session->product->slug));
@@ -323,7 +339,7 @@ class ComposedDesignTest extends TestCase
         $this->assertSame(ArtworkSessionStatus::PreviewReady, $session->fresh()->status);
         $this->assertSame(1, $session->fresh()->generations()->count());
         $this->withCookie('cattie_guest_token', 'basket-editor')->get(route('products.show', $session->product->slug))
-            ->assertOk()->assertSee('Your bottle design')->assertSee('Bottle colour')
+            ->assertOk()->assertSee('Water Bottle with Red Flip Lid')->assertSee('Bottle colour')
             ->assertSee('id="artwork-name"', false)->assertSee('x-model="nameValue"', false)->assertSee('Maria')
             ->assertSee('Resize character')->assertDontSee('Upload your photo');
     }

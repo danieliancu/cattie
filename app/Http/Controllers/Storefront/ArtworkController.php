@@ -3,13 +3,12 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Domain\Artwork\Actions\ApproveArtwork;
-use App\Domain\Artwork\Actions\RecordAnalyticsEvent;
 use App\Domain\Artwork\Actions\RenderComposedDesign;
 use App\Domain\Artwork\Actions\RequestArtworkGeneration;
 use App\Domain\Artwork\Actions\StartArtworkSession;
+use App\Domain\Artwork\Actions\StoreArtworkUpload;
 use App\Enums\ArtworkSessionStatus;
 use App\Http\Controllers\Controller;
-use App\Jobs\NormaliseArtworkUpload;
 use App\Models\ArtworkSession;
 use App\Models\ComposedDesign;
 use App\Models\GenerationAsset;
@@ -33,12 +32,12 @@ class ArtworkController extends Controller
         return $session;
     }
 
-    public function start(Product $product, Request $request, StartArtworkSession $start, RecordAnalyticsEvent $analytics): RedirectResponse
+    public function start(Product $product, Request $request, StartArtworkSession $start, StoreArtworkUpload $store): RedirectResponse
     {
         abort_unless($product->is_active, 404);
         $file = $this->validatedPhoto($request);
         [$session,$token] = $start->handle($product, $request->all(), $request->cookie('cattie_guest_token'));
-        $this->storeUpload($session, $file, $analytics);
+        $store->handle($session, file_get_contents($file->getRealPath()), $file->getMimeType(), $file->getClientOriginalName());
 
         return redirect()->route('products.show', $product->slug)->withCookie(app(GuestContext::class)->cookie($token));
     }
@@ -50,7 +49,7 @@ class ArtworkController extends Controller
         return redirect()->route('products.show', $session->product->slug);
     }
 
-    public function upload(string $publicId, Request $request, RecordAnalyticsEvent $analytics, StartArtworkSession $configuration, RenderComposedDesign $render): RedirectResponse
+    public function upload(string $publicId, Request $request, StoreArtworkUpload $store, StartArtworkSession $configuration, RenderComposedDesign $render): RedirectResponse
     {
         $session = $this->owned($publicId, $request);
         if (! in_array($session->status, [ArtworkSessionStatus::AwaitingUpload, ArtworkSessionStatus::Failed], true)) {
@@ -67,7 +66,8 @@ class ArtworkController extends Controller
         if (! $request->hasFile('photo') && $session->currentGeneration) {
             $session->load(['product.designTemplate', 'currentGeneration.assets']);
             if ($session->product->designTemplate) {
-                $asset = $session->currentGeneration->assets->firstWhere('kind', 'provider_original');
+                $asset = $session->currentGeneration->assets->firstWhere('kind', 'composition_source')
+                    ?? $session->currentGeneration->assets->firstWhere('kind', 'provider_original');
                 abort_unless($asset, 422);
                 $currentDesign = $session->composedDesigns()
                     ->where('generation_asset_id', $asset->id)
@@ -82,7 +82,7 @@ class ArtworkController extends Controller
             return redirect()->route('products.show', $session->product->slug);
         }
         $file = $this->validatedPhoto($request);
-        $this->storeUpload($session, $file, $analytics);
+        $store->handle($session, file_get_contents($file->getRealPath()), $file->getMimeType(), $file->getClientOriginalName());
 
         return redirect()->route('products.show', $session->product->slug);
     }
@@ -90,19 +90,6 @@ class ArtworkController extends Controller
     private function validatedPhoto(Request $request)
     {
         return $request->validate(['photo' => ['required', 'file', 'max:'.config('artwork.upload.max_kb'), 'mimetypes:image/jpeg,image/png,image/webp', 'dimensions:min_width='.config('artwork.upload.min_dimension').',min_height='.config('artwork.upload.min_dimension').',max_width='.config('artwork.upload.max_dimension').',max_height='.config('artwork.upload.max_dimension')]])['photo'];
-    }
-
-    private function storeUpload(ArtworkSession $session, $file, RecordAnalyticsEvent $analytics): void
-    {
-        $bytes = file_get_contents($file->getRealPath());
-        abort_unless(@getimagesizefromstring($bytes) !== false, 422);
-        $key = 'artwork/originals/'.bin2hex(random_bytes(24)).'.'.$file->guessExtension();
-        Storage::disk('local')->put($key, $bytes);
-        [$width,$height] = getimagesizefromstring($bytes);
-        $upload = $session->uploads()->create(['guest_token' => null, 'disk' => 'local', 'storage_key' => $key, 'original_name' => $file->getClientOriginalName(), 'mime_type' => $file->getMimeType(), 'size_bytes' => strlen($bytes), 'width' => $width, 'height' => $height, 'sha256' => hash('sha256', $bytes), 'expires_at' => $session->expires_at]);
-        $session->update(['current_upload_id' => $upload->id, 'status' => ArtworkSessionStatus::PreparingPhoto]);
-        $analytics->handle('photo_uploaded', $upload);
-        NormaliseArtworkUpload::dispatch($upload);
     }
 
     public function status(string $publicId, Request $request): JsonResponse
@@ -152,9 +139,9 @@ class ArtworkController extends Controller
         abort_unless($design->artwork_session_id === $session->id, 404);
         abort_unless($session->status === ArtworkSessionStatus::PreviewReady, 409);
         $adjustments = $request->validate([
-            'scale' => ['required', 'numeric', 'min:0.6', 'max:1.8'],
-            'offset_x' => ['required', 'numeric', 'min:-0.2', 'max:0.2'],
-            'offset_y' => ['required', 'numeric', 'min:-0.2', 'max:0.2'],
+            'scale' => ['required', 'numeric', 'min:0.1', 'max:50'],
+            'offset_x' => ['required', 'numeric', 'min:-1000', 'max:1000'],
+            'offset_y' => ['required', 'numeric', 'min:-1000', 'max:1000'],
         ]);
         $updated = $render->handle($session, $design->generationAsset, array_map('floatval', $adjustments));
 
@@ -191,34 +178,34 @@ class ArtworkController extends Controller
     {
         $session = $this->owned($publicId, $request)->load(['product.variants', 'currentGeneration.assets']);
         abort_unless($session->status === ArtworkSessionStatus::PreviewReady && $session->product->designTemplate, 409);
-        $validated = $request->validate(['variant_id' => 'required|string', 'design_id' => 'nullable|string']);
+        $validated = $request->validate([
+            'variant_id' => ['required', 'string'],
+            'design_id' => [$request->expectsJson() ? 'required' : 'nullable', 'string'],
+        ]);
         $variant = $session->product->variants->firstWhere('id', $validated['variant_id']);
         abort_unless($variant?->is_active, 422);
-        $asset = $session->currentGeneration?->assets->firstWhere('kind', 'provider_original');
-        abort_unless($asset, 422);
-        $currentDesign = isset($validated['design_id'])
-            ? $session->composedDesigns()->whereKey($validated['design_id'])->firstOrFail()
-            : null;
-        $characterAdjustments = $currentDesign?->character_adjustments ?? [];
+        $currentDesign = null;
+        if (isset($validated['design_id'])) {
+            $currentDesign = $session->composedDesigns()->whereKey($validated['design_id'])->firstOrFail();
+        }
         $previousVariantId = $session->product_variant_id;
         $session->update(['product_variant_id' => $variant->id]);
-        try {
-            $design = $render->handle($session->fresh(), $asset, $characterAdjustments);
-        } catch (\Throwable $e) {
-            $session->update(['product_variant_id' => $previousVariantId]);
-            report($e);
-
-            if ($request->expectsJson()) {
-                return response()->json(['message' => 'We could not prepare that bottle design. Please try again.'], 422);
-            }
-
-            return redirect()->route('products.show', $session->product->slug)->withErrors(['design' => 'We could not prepare that bottle design. Please try again.']);
-        }
 
         if ($request->expectsJson()) {
+            try {
+                $design = $render->handle($session->fresh(), $currentDesign->generationAsset, $currentDesign->character_adjustments ?? []);
+            } catch (\Throwable $e) {
+                $session->update(['product_variant_id' => $previousVariantId]);
+                report($e);
+
+                return response()->json(['message' => 'We could not update that colour. Please try again.'], 422);
+            }
+
             return response()->json([
                 'variant_id' => $variant->id,
+                'surface_colour' => $session->product->preview_configuration['design_surfaces_by_variant'][strtolower($variant->options['colour'] ?? '')] ?? '#f4efe7',
                 'design_id' => $design->id,
+                'asset_id' => $design->generation_asset_id,
                 'preview_url' => route('artwork.designs', [$session->public_id, $design]),
                 'layout_url' => route('artwork.design-layout', [$session->public_id, $design]),
                 'background_url' => route('artwork.design-editor-background', [$session->public_id, $design]),
@@ -237,7 +224,8 @@ class ArtworkController extends Controller
             'design_id' => ['required', 'string'],
         ]);
         $currentDesign = $session->composedDesigns()->whereKey($validated['design_id'])->firstOrFail();
-        $asset = $session->currentGeneration?->assets->firstWhere('kind', 'provider_original');
+        $asset = $session->currentGeneration?->assets->firstWhere('kind', 'composition_source')
+            ?? $session->currentGeneration?->assets->firstWhere('kind', 'provider_original');
         abort_unless($asset && $currentDesign->generation_asset_id === $asset->id, 422);
         $previousSnapshot = $session->personalisation_snapshot;
         $snapshot = collect($previousSnapshot)->map(function (array $field) use ($validated) {

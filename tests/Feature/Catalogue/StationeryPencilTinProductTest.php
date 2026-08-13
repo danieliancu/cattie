@@ -120,6 +120,28 @@ class StationeryPencilTinProductTest extends TestCase
         }
     }
 
+    public function test_variant_change_rerenders_the_preview_with_the_new_text_colour(): void
+    {
+        [$session, $asset] = $this->renderInputs('blue');
+        $initial = app(RenderComposedDesign::class)->handle($session, $asset, ['scale' => 1.1, 'offset_x' => .02, 'offset_y' => -.01]);
+        $pink = $session->product->variants->first(fn (ProductVariant $variant) => $variant->options['colour'] === 'pink');
+
+        $response = $this->withCookie('cattie_guest_token', 'pencil-tin-blue')->post(route('artwork.variant', $session->public_id), [
+            'variant_id' => $pink->id,
+            'design_id' => $initial->id,
+        ], ['Accept' => 'application/json']);
+
+        $response->assertOk()->assertJsonStructure(['variant_id', 'design_id', 'asset_id', 'preview_url', 'layout_url', 'background_url']);
+        $updated = $session->composedDesigns()->findOrFail($response->json('design_id'));
+        $image = imagecreatefrompng(Storage::disk('local')->path($updated->storage_key));
+        $this->assertSame($pink->id, $updated->product_variant_id);
+        $this->assertSame(['scale' => 1.1, 'offset_x' => .02, 'offset_y' => -.01], $updated->character_adjustments);
+        $this->assertTrue($this->containsColour($image, 236, 72, 153));
+        $this->assertFalse($this->containsColour($image, 37, 99, 235));
+        $this->assertSame(1, $session->generations()->count(), 'Changing text colour must not run AI again.');
+        imagedestroy($image);
+    }
+
     public function test_seeding_is_idempotent_and_workspace_left_column_is_sticky_on_desktop(): void
     {
         $product = $this->product();
@@ -134,7 +156,9 @@ class StationeryPencilTinProductTest extends TestCase
         app(RenderComposedDesign::class)->handle($session, $asset);
         $this->withCookie('cattie_guest_token', 'pencil-tin-blue')
             ->get(route('products.show', $product->slug))->assertOk()
-            ->assertSee('class="lg:sticky lg:top-24 lg:self-start"', false);
+            ->assertSee('class="lg:sticky lg:top-24 lg:self-start"', false)
+            ->assertSee('x-show="changingColour"', false)
+            ->assertSee('Updating colours', false);
     }
 
     private function product(): Product

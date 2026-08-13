@@ -94,7 +94,7 @@ class ProductArtworkWorkspaceTest extends TestCase
             ->assertOk()->assertSee('value="Maria"', false)->assertSee('Your AI illustration')
             ->assertSee(route('artwork.assets', [$session->public_id, $preview]), false)
             ->assertSee('Remove selected photo')->assertSee('hasExistingPhoto:true', false)
-            ->assertSee('x-show="removeExistingPhoto"', false)->assertDontSee('Your artwork is ready');
+            ->assertSee('x-show="removeExistingPhoto"', false)->assertSee('h-[135px] w-auto max-w-full rounded-2xl object-contain shadow', false)->assertDontSee('Your artwork is ready');
         $this->withCookie('cattie_guest_token', 'change-owner')->post(route('artwork.upload', $session->public_id), [
             'variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation' => ['name' => 'Maria'],
         ])->assertRedirect(route('products.show', $product->slug));

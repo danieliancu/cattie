@@ -2,17 +2,23 @@
 
 namespace Tests\Feature\Artwork;
 
+use App\Contracts\BackgroundRemovalRunner;
+use App\Contracts\ImageGenerationProvider;
+use App\Data\ImageGenerationRequest;
+use App\Data\ImageGenerationResult;
 use App\Domain\Artwork\Actions\RecordAnalyticsEvent;
 use App\Domain\Artwork\Actions\RequestArtworkGeneration;
 use App\Domain\Artwork\Actions\StartArtworkSession;
 use App\Enums\ArtworkSessionStatus;
 use App\Enums\GenerationStatus;
+use App\Exceptions\ImageGenerationException;
 use App\Jobs\GenerateArtwork;
 use App\Models\ArtworkStyle;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Providers\ImageGeneration\FakeImageGenerationProvider;
 use App\Services\AiGenerationCostCalculator;
+use App\Services\BackgroundRemovalProcessor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -31,10 +37,10 @@ class GenerateArtworkJobTest extends TestCase
 
         $generation->refresh();
         $this->assertSame(GenerationStatus::Succeeded, $generation->status);
-        $this->assertSame('estimated', $generation->cost_basis);
-        $this->assertSame(70000, $generation->cost_micros);
+        $this->assertSame('unavailable', $generation->cost_basis);
+        $this->assertNull($generation->cost_micros);
         $this->assertSame('fake-'.$generation->id, $generation->provider_request_id);
-        $this->assertEqualsCanonicalizing(['provider_original', 'web_preview'], $generation->assets->pluck('kind')->all());
+        $this->assertEqualsCanonicalizing(['provider_original', 'composition_source', 'web_preview'], $generation->assets->pluck('kind')->all());
         $this->assertSame(ArtworkSessionStatus::PreviewReady, $generation->artworkSession->status);
     }
 
@@ -51,6 +57,22 @@ class GenerateArtworkJobTest extends TestCase
         $this->assertSame(ArtworkSessionStatus::Failed, $generation->artworkSession->fresh()->status);
     }
 
+    public function test_missing_frozen_style_reference_sets_consistent_terminal_states(): void
+    {
+        Storage::fake('local');
+        $generation = $this->generation();
+        config(['artwork.style_references.storybook-cartoon-v4.path' => base_path('missing-style-reference.png')]);
+
+        (new GenerateArtwork($generation))->handle(new FakeImageGenerationProvider, new AiGenerationCostCalculator, app(RecordAnalyticsEvent::class));
+
+        $this->assertSame(GenerationStatus::Failed, $generation->fresh()->status);
+        $this->assertSame('configuration', $generation->fresh()->failure_category);
+        $this->assertSame('invalid_style_reference', $generation->fresh()->provider_error_code);
+        $this->assertFalse($generation->fresh()->is_retryable);
+        $this->assertSame(ArtworkSessionStatus::Failed, $generation->artworkSession->fresh()->status);
+        $this->assertDatabaseCount('generation_assets', 0);
+    }
+
     public function test_fake_provider_uses_three_deterministic_visible_variants(): void
     {
         Storage::fake('local');
@@ -59,7 +81,7 @@ class GenerateArtworkJobTest extends TestCase
             $generation = $this->generation();
             $generation->update(['parameters' => ['generation_sequence' => $sequence]]);
             (new GenerateArtwork($generation))->handle(new FakeImageGenerationProvider, new AiGenerationCostCalculator, app(RecordAnalyticsEvent::class));
-            $variants[] = $generation->fresh()->parameters['variant'];
+            $variants[] = $generation->fresh()->parameters['provider']['variant'];
         }
 
         $this->assertSame(['a', 'b', 'c'], $variants);
@@ -82,6 +104,37 @@ class GenerateArtworkJobTest extends TestCase
         $this->assertSame(GenerationStatus::Succeeded, $second->fresh()->status);
         $this->assertSame(ArtworkSessionStatus::PreviewReady, $second->artworkSession->fresh()->status);
         $this->assertDatabaseCount('generations', 2);
+    }
+
+    public function test_background_removal_failure_creates_no_partial_assets_and_sets_terminal_states(): void
+    {
+        Storage::fake('local');
+        $generation = $this->generation();
+        $generation->update(['parameters' => array_merge($generation->parameters, ['output_requirements' => ['transparent_background' => true]])]);
+        $provider = new class implements ImageGenerationProvider
+        {
+            public function generate(ImageGenerationRequest $request): ImageGenerationResult
+            {
+                $image = imagecreatetruecolor(30, 30);
+                imagefill($image, 0, 0, imagecolorallocate($image, 200, 150, 100));
+                ob_start();
+                imagepng($image);
+                $bytes = ob_get_clean();
+                imagedestroy($image);
+
+                return new ImageGenerationResult($bytes);
+            }
+        };
+        $runner = \Mockery::mock(BackgroundRemovalRunner::class);
+        $runner->shouldReceive('run')->once()->andThrow(new ImageGenerationException('failed', 'post_processing', 'background_removal_failed', false));
+
+        (new GenerateArtwork($generation))->handle($provider, new AiGenerationCostCalculator, app(RecordAnalyticsEvent::class), null, new BackgroundRemovalProcessor($runner));
+
+        $this->assertSame(GenerationStatus::Failed, $generation->fresh()->status);
+        $this->assertSame(ArtworkSessionStatus::Failed, $generation->artworkSession->fresh()->status);
+        $this->assertSame('background_removal_failed', $generation->fresh()->provider_error_code);
+        $this->assertDatabaseCount('generation_assets', 0);
+        Storage::disk('local')->assertMissing('artwork/generated');
     }
 
     private function generation()

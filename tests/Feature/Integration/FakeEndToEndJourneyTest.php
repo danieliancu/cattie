@@ -38,7 +38,7 @@ class FakeEndToEndJourneyTest extends TestCase
         $generation = $session->currentGeneration;
         $this->assertSame(ArtworkSessionStatus::PreviewReady, $session->status);
         $this->assertSame(GenerationStatus::Succeeded, $generation->status);
-        $this->assertEqualsCanonicalizing(['provider_original', 'web_preview'], $generation->assets->pluck('kind')->all());
+        $this->assertEqualsCanonicalizing(['provider_original', 'composition_source', 'web_preview'], $generation->assets->pluck('kind')->all());
         $preview = $generation->assets->firstWhere('kind', 'web_preview');
         $this->withCookie('cattie_guest_token', 'journey-owner')->post(route('artwork.approve', $session->public_id), ['asset_id' => $preview->id])->assertRedirect();
         $this->withCookie('cattie_guest_token', 'journey-owner')->post(route('artwork.cart', $session->public_id), ['unit_price_minor' => 1])->assertRedirect(route('cart.index'));
@@ -52,7 +52,7 @@ class FakeEndToEndJourneyTest extends TestCase
         $this->withCookie('cattie_guest_token', 'journey-owner')->post(route('checkout.pay', $order->number), ['idempotency_key' => (string) Str::uuid(), 'scenario' => 'success', 'amount_minor' => 1])->assertRedirect(route('orders.confirmation', $order->number));
 
         $this->assertSame(OrderStatus::Paid, $order->fresh()->status);
-        foreach (['uploads' => 1, 'generations' => 1, 'generation_assets' => 2, 'cart_items' => 1, 'orders' => 1, 'order_items' => 1, 'payments' => 1] as $table => $count) {
+        foreach (['uploads' => 1, 'generations' => 1, 'generation_assets' => 3, 'cart_items' => 1, 'orders' => 1, 'order_items' => 1, 'payments' => 1] as $table => $count) {
             $this->assertDatabaseCount($table, $count);
         }
         $this->assertSame($preview->id, $order->items()->first()->generation_asset_id);

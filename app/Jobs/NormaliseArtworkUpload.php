@@ -15,7 +15,7 @@ class NormaliseArtworkUpload implements ShouldQueue
 
     public $tries = 2;
 
-    public function __construct(public Upload $upload) {}
+    public function __construct(public Upload $upload, public bool $dispatchGeneration = true) {}
 
     public function handle(RequestArtworkGeneration $request): void
     {
@@ -49,7 +49,7 @@ class NormaliseArtworkUpload implements ShouldQueue
         unset($source, $bytes);
         gc_collect_cycles();
         $session = $this->upload->artworkSession;
-        $request->handle($session);
+        $request->handle($session, false, $this->dispatchGeneration);
     }
 
     public function failed(): void

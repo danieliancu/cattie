@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\BackgroundRemovalRunner;
 use App\Contracts\ImageGenerationProvider;
 use App\Contracts\PaymentProvider;
 use App\Domain\Cart\Actions\ResolveGuestCart;
@@ -16,6 +17,7 @@ use App\Observers\ProductObserver;
 use App\Providers\ImageGeneration\FakeImageGenerationProvider;
 use App\Providers\ImageGeneration\OpenAiImageGenerationProvider;
 use App\Providers\Payments\FakePaymentProvider;
+use App\Services\LocalBackgroundRemovalRunner;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use RuntimeException;
@@ -27,8 +29,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(BackgroundRemovalRunner::class, LocalBackgroundRemovalRunner::class);
         $this->app->bind(ImageGenerationProvider::class, fn () => match (config('artwork.provider')) {
-            'openai' => new OpenAiImageGenerationProvider, default => new FakeImageGenerationProvider
+            'openai' => new OpenAiImageGenerationProvider,
+            'fake' => new FakeImageGenerationProvider,
+            default => throw new RuntimeException('Unsupported image generation provider.'),
         });
         $this->app->bind(PaymentProvider::class, fn () => match (config('payments.provider')) {
             'fake' => new FakePaymentProvider, default => throw new RuntimeException('Unsupported payment provider.')

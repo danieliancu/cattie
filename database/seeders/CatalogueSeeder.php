@@ -186,7 +186,7 @@ class CatalogueSeeder extends Seeder
                 'sort_order' => 6,
                 'base_price_minor' => 1650,
                 'currency' => 'GBP',
-                'artwork_requirements' => ['source_photo' => 'required', 'orientation' => 'portrait_preferred'],
+                'artwork_requirements' => ['source_photo' => 'required', 'orientation' => 'portrait', 'framing' => 'full_body', 'isolated_subject' => true, 'transparent_background' => true],
                 'preview_configuration' => [
                     'default_variant_options' => ['colour' => 'white'],
                     'design_surfaces_by_variant' => [
@@ -314,7 +314,7 @@ class CatalogueSeeder extends Seeder
                 'sort_order' => 7,
                 'base_price_minor' => 1950,
                 'currency' => 'GBP',
-                'artwork_requirements' => ['source_photo' => 'required', 'orientation' => 'portrait_preferred'],
+                'artwork_requirements' => ['source_photo' => 'required', 'orientation' => 'portrait', 'framing' => 'full_body', 'isolated_subject' => true, 'transparent_background' => true],
                 'preview_configuration' => [
                     'default_variant_options' => ['colour' => 'blue'],
                     'design_surfaces_by_variant' => ['blue' => '#ffffff', 'pink' => '#ffffff', 'white' => '#ffffff'],
@@ -409,7 +409,7 @@ class CatalogueSeeder extends Seeder
                 'sort_order' => 8,
                 'base_price_minor' => 1795,
                 'currency' => 'GBP',
-                'artwork_requirements' => ['source_photo' => 'required', 'orientation' => 'portrait_preferred'],
+                'artwork_requirements' => ['source_photo' => 'required', 'orientation' => 'portrait', 'framing' => 'full_body', 'isolated_subject' => true, 'transparent_background' => true],
                 'preview_configuration' => [
                     'default_variant_options' => ['colour' => 'blue'],
                     'design_surfaces_by_variant' => ['blue' => '#ffffff', 'pink' => '#ffffff', 'silver' => '#ffffff'],

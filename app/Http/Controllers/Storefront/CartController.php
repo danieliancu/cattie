@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Domain\Artwork\Actions\ApproveArtwork;
+use App\Domain\Artwork\Actions\RenderComposedDesign;
 use App\Domain\Cart\Actions\AddApprovedArtworkToCart;
 use App\Domain\Cart\Actions\RefreshCartPrices;
 use App\Domain\Cart\Actions\ResolveGuestCart;
@@ -21,7 +22,7 @@ use Illuminate\View\View;
 
 class CartController extends Controller
 {
-    public function add(string $publicId, Request $request, ResolveGuestCart $resolve, AddApprovedArtworkToCart $add, ApproveArtwork $approve, GuestContext $guest): RedirectResponse
+    public function add(string $publicId, Request $request, ResolveGuestCart $resolve, AddApprovedArtworkToCart $add, ApproveArtwork $approve, RenderComposedDesign $render, GuestContext $guest): RedirectResponse
     {
         $session = ArtworkSession::query()->where('public_id', $publicId)->firstOrFail();
         abort_unless($guest->owns($session->access_token_hash, $request), 404);
@@ -39,6 +40,12 @@ class CartController extends Controller
                     : $session->composedDesigns->where('generation_asset_id', $asset?->id)->where('product_variant_id', $session->product_variant_id)->sortByDesc('created_at')->first())
                 : null;
             abort_unless($asset, 422);
+            if ($session->product->designTemplate) {
+                $asset = $session->currentGeneration?->assets->firstWhere('kind', 'composition_source')
+                    ?? $session->currentGeneration?->assets->firstWhere('kind', 'provider_original');
+                abort_unless($asset, 422);
+                $design = $render->handle($session->fresh(), $asset, $design?->character_adjustments ?? []);
+            }
             $approve->handle($session, $asset, $design);
             $session->refresh();
         }

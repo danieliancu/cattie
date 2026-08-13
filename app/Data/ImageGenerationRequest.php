@@ -14,5 +14,8 @@ final readonly class ImageGenerationRequest
         public string $size,
         public int $candidates = 1,
         public int $generationSequence = 1,
+        public array $outputRequirements = [],
+        /** @var list<ImageGenerationReference> */
+        public array $references = [],
     ) {}
 }

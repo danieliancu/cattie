@@ -47,16 +47,30 @@ class RenderComposedDesign
         imagefill($canvas, 0, 0, imagecolorallocatealpha($canvas, 0, 0, 0, 127));
         imagealphablending($canvas, true);
 
+        $editorScale = min(1, self::PREVIEW_MAX_EDGE / max($size['width'], $size['height']));
+        $editorWidth = max(1, (int) round($size['width'] * $editorScale));
+        $editorHeight = max(1, (int) round($size['height'] * $editorScale));
+        $editorCanvas = imagecreatetruecolor($editorWidth, $editorHeight);
+        if (! $editorCanvas) {
+            imagedestroy($source);
+            imagedestroy($canvas);
+            throw new RuntimeException('The editor canvas could not be created.');
+        }
+        imagealphablending($editorCanvas, false);
+        imagesavealpha($editorCanvas, true);
+        imagefill($editorCanvas, 0, 0, imagecolorallocatealpha($editorCanvas, 0, 0, 0, 127));
+        imagealphablending($editorCanvas, true);
+
         try {
             $editorBackgroundBytes = null;
             foreach ($definition['layers'] as $layer) {
                 if (($layer['type'] ?? null) === 'generation_asset') {
-                    $editorBackgroundBytes = $this->previewBytes($canvas);
+                    $editorBackgroundBytes = $this->previewBytes($editorCanvas);
                 }
                 match ($layer['type'] ?? null) {
-                    'transparent' => $this->renderTransparent($canvas),
+                    'transparent' => [$this->renderTransparent($canvas), $this->renderTransparent($editorCanvas)],
                     'solid' => $this->renderSolid($canvas, $layer, $session->variant->options ?? []),
-                    'personalisation_text_pattern' => $this->renderTextPattern($canvas, $layer, $definition, $personalisation->all(), $template, $session->variant->options ?? []),
+                    'personalisation_text_pattern' => [$this->renderTextPattern($canvas, $layer, $definition, $personalisation->all(), $template, $session->variant->options ?? []), $this->renderTextPattern($editorCanvas, $layer, $definition, $personalisation->all(), $template, $session->variant->options ?? [])],
                     'generation_asset' => $this->renderGenerationAsset($canvas, $source, $layer, $definition[$layer['config'] ?? ''] ?? [], $characterAdjustments),
                     default => throw new RuntimeException('The design template contains an unsupported layer.'),
                 };
@@ -76,6 +90,7 @@ class RenderComposedDesign
         } finally {
             imagedestroy($source);
             imagedestroy($canvas);
+            imagedestroy($editorCanvas);
         }
 
         $directory = "artwork-sessions/{$session->public_id}/composed-designs";
@@ -329,16 +344,47 @@ class RenderComposedDesign
         $rect = $this->characterBox($config, imagesx($canvas), imagesy($canvas));
         $sourceRect = $this->opaqueBounds($source);
         $contained = $this->containedSize($sourceRect['width'], $sourceRect['height'], $rect['width'], $rect['height']);
-        $scale = max(.6, min(1.8, (float) ($adjustments['scale'] ?? 1)));
+        $scale = max(.1, min(50, (float) ($adjustments['scale'] ?? 1)));
         $width = max(1, (int) round($contained['width'] * $scale));
         $height = max(1, (int) round($contained['height'] * $scale));
-        $offsetX = max(-.2, min(.2, (float) ($adjustments['offset_x'] ?? 0))) * imagesx($canvas);
-        $offsetY = max(-.2, min(.2, (float) ($adjustments['offset_y'] ?? 0))) * imagesy($canvas);
+        $offsetX = max(-1000, min(1000, (float) ($adjustments['offset_x'] ?? 0))) * imagesx($canvas);
+        $offsetY = max(-1000, min(1000, (float) ($adjustments['offset_y'] ?? 0))) * imagesy($canvas);
         $x = $rect['x'] + (int) round(($rect['width'] - $width) / 2 + $offsetX);
         $y = $rect['y'] + (int) round(($rect['height'] - $height) / 2 + $offsetY);
+
+        // Crop the resampling operation to the printable area. At high zoom levels
+        // the virtual destination can be enormous, while only this small window is visible.
+        $visibleLeft = max($rect['x'], $x);
+        $visibleTop = max($rect['y'], $y);
+        $visibleRight = min($rect['x'] + $rect['width'], $x + $width);
+        $visibleBottom = min($rect['y'] + $rect['height'], $y + $height);
+        if ($visibleRight <= $visibleLeft || $visibleBottom <= $visibleTop) {
+            return;
+        }
+
+        $sourceLeft = $sourceRect['x'] + (($visibleLeft - $x) / $width * $sourceRect['width']);
+        $sourceTop = $sourceRect['y'] + (($visibleTop - $y) / $height * $sourceRect['height']);
+        $sourceRight = $sourceRect['x'] + (($visibleRight - $x) / $width * $sourceRect['width']);
+        $sourceBottom = $sourceRect['y'] + (($visibleBottom - $y) / $height * $sourceRect['height']);
+        $sourceX = max($sourceRect['x'], (int) floor($sourceLeft));
+        $sourceY = max($sourceRect['y'], (int) floor($sourceTop));
+        $sourceWidth = max(1, min($sourceRect['x'] + $sourceRect['width'], (int) ceil($sourceRight)) - $sourceX);
+        $sourceHeight = max(1, min($sourceRect['y'] + $sourceRect['height'], (int) ceil($sourceBottom)) - $sourceY);
+
         imagesetclip($canvas, $rect['x'], $rect['y'], $rect['x'] + $rect['width'] - 1, $rect['y'] + $rect['height'] - 1);
         imagealphablending($canvas, true);
-        imagecopyresampled($canvas, $source, $x, $y, $sourceRect['x'], $sourceRect['y'], $width, $height, $sourceRect['width'], $sourceRect['height']);
+        imagecopyresampled(
+            $canvas,
+            $source,
+            $visibleLeft,
+            $visibleTop,
+            $sourceX,
+            $sourceY,
+            $visibleRight - $visibleLeft,
+            $visibleBottom - $visibleTop,
+            $sourceWidth,
+            $sourceHeight,
+        );
         imagesetclip($canvas, 0, 0, imagesx($canvas) - 1, imagesy($canvas) - 1);
     }
 
