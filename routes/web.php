@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\Storefront\ArtworkController;
+use App\Http\Controllers\Storefront\AccountController;
 use App\Http\Controllers\Storefront\CartController;
 use App\Http\Controllers\Storefront\CheckoutController;
+use App\Http\Controllers\Storefront\CustomerAuthController;
 use App\Http\Controllers\Storefront\HomeController;
 use App\Http\Controllers\Storefront\InformationPageController;
 use App\Http\Controllers\Storefront\ProductCategoryController;
@@ -12,6 +14,19 @@ use App\Http\Controllers\Storefront\SitemapController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [CustomerAuthController::class, 'loginForm'])->name('login');
+    Route::post('/login', [CustomerAuthController::class, 'login'])->middleware('throttle:10,1')->name('login.store');
+    Route::get('/register', [CustomerAuthController::class, 'registerForm'])->name('register');
+    Route::post('/register', [CustomerAuthController::class, 'register'])->middleware('throttle:10,1')->name('register.store');
+});
+Route::middleware('auth')->group(function () {
+    Route::post('/logout', [CustomerAuthController::class, 'logout'])->name('logout');
+    Route::get('/account', [AccountController::class, 'index'])->name('account.index');
+    Route::get('/account/orders', [AccountController::class, 'orders'])->name('account.orders.index');
+    Route::get('/account/orders/{orderNumber}', [AccountController::class, 'show'])->name('account.orders.show');
+    Route::get('/account/orders/{orderNumber}/items/{item}/artwork', [AccountController::class, 'artwork'])->name('account.orders.artwork');
+});
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');
 Route::get('/products/{slug}', [ProductController::class, 'show'])->name('products.show');
 Route::get('/admin-preview/products/{product}', ProductPreviewController::class)->name('admin.products.preview');

@@ -3,6 +3,7 @@
 |  **1** | 💳 **Stripe REAL**              | Plată reală cu cardul, Stripe Checkout/Payment, webhook success/failure, comanda devine `Paid`. Produsele și prețurile rămân în Cattie, nu le duplicăm manual în Stripe.   |
 |  **2** | 👤 **Customer Account**         | Înregistrare simplă cu **email + parolă**, login/logout, cont client. Deocamdată fără complicații suplimentare de securitate; hardening-ul îl facem înainte de production. |
 |  **3** | 📦 **Order history în cont**    | Clientul vede comenzile lui, numărul comenzii, produsele, totalul și statusul. Aș include asta direct în etapa contului — altfel contul nu are mare valoare.               |
+|  ** ** |    **Save character**           | |
 |  **4** | 🆘 **Order Support**            | În header apare **`Order Support`**, roșu și subliniat. Duce la o pagină dedicată pentru probleme cu comenzile.                                                            |
 |  **5** | ✉️ **Emailuri**                 | Confirmare comandă, confirmare plată, apoi ulterior shipped + tracking.                                                                                                    |
 |  **6** | 🖨️ **PrintAsset finalisation**  | PNG-ul print-ready există deja; îl formalizăm ca `PrintAsset`, checksum, validare și legare definitivă de comandă.                                                         |

@@ -21,6 +21,7 @@ Aplicația include în prezent:
 - editor pentru mutarea și redimensionarea personajului;
 - PNG transparent, full-resolution, cu metadata 300 PPI pentru tipografie;
 - basket, checkout UK, plăți fake și Stripe Embedded Checkout fără catalog Stripe;
+- conturi storefront opționale, autentificare pe sesiune și istoric privat de comenzi;
 - modele și stări pentru producție/fulfilment;
 - integrare de catalog și quotes Prodigi și webhook-uri TreatPod;
 - panou administrativ Filament;
@@ -361,6 +362,17 @@ Exemplu: `2185 × 898 px / 300 PPI = aproximativ 185 × 76 mm`.
 - sesiunile Pending deschise sunt reutilizate la refresh, iar statusul browserului folosește aceeași reconciliere ca webhook-ul;
 - flow-ul fake continuă să poată ajunge sincron la comandă `Paid` în dezvoltare.
 
+### Contul clientului și istoricul comenzilor
+
+- cumpărarea ca guest rămâne disponibilă; contul nu este cerut în configurator, basket sau checkout;
+- înregistrarea cere numai email și parolă, autentifică imediat clientul și creează întotdeauna `is_admin=false`;
+- loginul storefront este separat de Filament, suportă Remember me și păstrează destinația intenționată;
+- basket-ul browserului are prioritate la autentificare, este asociat clientului și primește fără duplicare itemii altui basket activ al contului;
+- comenzile create autentificat primesc `Order.user_id` server-side, iar emailul comenzii rămâne snapshot imuabil;
+- `/account`, `/account/orders` și detaliul comenzii sunt protejate prin auth și interoghează exclusiv `orders.user_id`;
+- statusurile au etichete publice prietenoase, iar thumbnails sunt livrate printr-o rută privată scoped la Order și OrderItem;
+- o comandă guest poate fi revendicată individual numai când browserul dovedește tokenul existent și emailul contului coincide; nu există revendicare în masă după email.
+
 ### Stări de comandă
 
 Sunt modelate stările de la draft și artwork până la paid, print asset, fulfilment, production, shipping, delivery, failure, cancellation și refund. Tranzițiile sunt auditate prin `OrderStatusTransition`.
@@ -414,7 +426,7 @@ Modelele acoperă:
 - catalog: Product, ProductVariant, ProductImage, ProductCategory, ArtworkStyle, personalisation fields;
 - template-uri: ProductDesignTemplate, DesignTemplateVersion, assignments;
 - artwork: ArtworkSession, Upload/UploadAsset, Generation/GenerationAsset, ComposedDesign;
-- commerce: Cart/CartItem, Order/OrderItem, Payment și ShippingMethod;
+- commerce: User, Cart/CartItem, Order/OrderItem, Payment și ShippingMethod;
 - producție: PrintAsset, FulfilmentProductMapping, FulfilmentSubmission, Shipment;
 - observabilitate: AnalyticsEvent, AdminAuditLog, WebhookEvent, OrderStatusTransition;
 - platformă: User, slug redirects.
@@ -431,13 +443,16 @@ Snapshot-urile de personalizare și artwork sunt păstrate pe entitățile tranz
 - sesiunile expirate, fără cart/order și neaprobate, sunt curățate zilnic la 03:30;
 - purge șterge uploaduri, generation assets, PNG/WebP și editor backgrounds;
 - retenția implicită pentru artwork este 30 de zile.
+- preview-urile din istoricul comenzilor sunt servite privat numai proprietarului autentificat al Order-ului.
 
 ## 13. Securitate și robustețe
 
 - tokenurile guest sunt comparate prin hash și cookie-ul este HttpOnly/SameSite Lax;
 - accesul la resurse private este verificat per sesiune;
 - CSRF este activ pe formularele storefront/admin;
-- adminul Filament are autentificare proprie;
+- adminul Filament are autentificare proprie, iar loginul storefront exclude explicit utilizatorii admin;
+- parolele clienților folosesc hashing-ul Laravel, loginul are mesaj generic, sesiunea este regenerată la autentificare și invalidată la logout;
+- istoricul folosește exclusiv `Order.user_id`; egalitatea emailului nu acordă acces și revendicarea guest cere tokenul browserului;
 - webhook-ul TreatPod verifică semnătura;
 - webhook-ul Stripe verifică raw body cu `Stripe-Signature` și secretul dedicat;
 - prompturile separă datele clientului de instrucțiuni și tratează personalizarea ca date citate;
@@ -464,7 +479,7 @@ Panoul este disponibil sub `/admin` și include:
 
 ## 15. Rute și suprafețe publice
 
-Aplicația are 57 de rute non-vendor. Grupurile principale:
+Aplicația are 69 de rute non-vendor. Grupurile principale:
 
 - home, products, categories, related content și sitemap;
 - artwork start/show/upload/status/assets/original/regenerate/cancel;
@@ -472,13 +487,14 @@ Aplicația are 57 de rute non-vendor. Grupurile principale:
 - approve, add to cart și change artwork;
 - basket quantity/remove;
 - checkout, payment, Stripe embedded session/status, Stripe return și confirmation;
+- register, login/logout, account overview, order history/detail și artwork privat per OrderItem;
 - pagini FAQ, delivery, returns, privacy, terms, payments și cookies;
 - webhook-uri Stripe și TreatPod;
 - resurse admin Filament.
 
 ## 16. Testare și starea verificărilor
 
-Repository-ul conține 28 fișiere de test Feature, grupate în:
+Repository-ul conține 30 de fișiere de test Feature, grupate în:
 
 - Admin;
 - Artwork;
@@ -506,7 +522,7 @@ Verificări recente trecute:
 
 - testele Stripe, payment și cart: 19 teste, 172 assertions;
 - build Vite production pentru Embedded Checkout;
-- suita completă: 147 teste trecute și 5 eșecuri preexistente/nelegate de Stripe (artwork regeneration lineage și assertions de markup ale workspace-ului/catalogului);
+- suita completă curentă: 161 teste trecute și 6 eșecuri preexistente/nelegate de Customer Account (artwork regeneration lineage și assertions de markup ale workspace-ului/catalogului);
 
 - PNG 300 PPI, `pHYs`, alpha și dimensiuni fizice;
 - Pencil Tin final și preview la schimbarea variantei;
@@ -570,6 +586,7 @@ php artisan prodigi:quote <SKU>
 5. Probe vizuale reale pentru prompturile de postură v5.
 6. Curățarea assertions de markup vechi și rularea periodică a suitei complete.
 7. Monitorizare operațională pentru queue, AI failures, fulfilment și storage growth.
+8. Password reset, email verification, 2FA, social login și hardening avansat pentru conturile clienților.
 
 ## 19. Protocol obligatoriu de actualizare
 
@@ -660,3 +677,14 @@ Documentul trebuie să descrie codul care există efectiv. Funcțiile planificat
 - denumirea publică `Storybook Cartoon` este afișată simplificat ca `Cartoon` în toate etichetele storefront: homepage, configurator, Basket, Checkout și Payment;
 - eliminat mesajul auxiliar despre traseul datelor cardului de sub formularul Stripe.
 - iconul Basket din header folosește simbolul de cărucior, păstrând badge-ul cantității.
+
+### 14 august 2026 — Customer Account și Order History
+
+- adăugate registration, login, remember me și logout storefront, separate de autentificarea Filament;
+- conturile de client folosesc numai email și parolă, au numele opțional și nu pot primi acces admin din request;
+- adăugate overview, My Orders, detaliu privat, statusuri publice și thumbnails autorizate per comandă;
+- comenzile autentificate sunt legate prin `user_id`, iar guest checkout rămâne neschimbat;
+- basket-ul browserului este păstrat și reconciliat determinist la autentificare;
+- confirmation oferă guest-ului revendicarea opțională a unei singure comenzi, protejată prin token și email;
+- testele Account, Cart, Payment, Stripe și end-to-end au trecut împreună: 33 teste și 335 assertions; suita completă a încheiat cu 161 passed, 6 failed, fără eșec nou în funcționalitatea Account.
+- formularele logout folosesc acțiune relativă pe hostul curent și submit explicit, evitând pierderea cookie-ului de sesiune când mediul local este accesat printr-un hostname diferit.

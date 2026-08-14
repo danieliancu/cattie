@@ -26,7 +26,7 @@ class ArtworkController extends Controller
     private function owned(string $publicId, Request $request): ArtworkSession
     {
         $session = ArtworkSession::query()->where('public_id', $publicId)->first();
-        abort_unless($session && app(GuestContext::class)->owns($session->access_token_hash, $request), 404);
+        abort_unless($session && (app(GuestContext::class)->owns($session->access_token_hash, $request) || ($request->user() && $session->user_id === $request->user()->id)), 404);
         if ($session->expires_at->isPast() && $session->status !== ArtworkSessionStatus::Approved) {
             $session->update(['status' => ArtworkSessionStatus::Expired]);
         }

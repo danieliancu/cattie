@@ -33,6 +33,7 @@ final class StoreArtworkUpload
 
         try {
             $upload = $session->uploads()->create([
+                'user_id' => $session->user_id,
                 'guest_token' => null,
                 'disk' => 'local',
                 'storage_key' => $key,

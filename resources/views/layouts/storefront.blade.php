@@ -20,10 +20,10 @@
             <a href="{{ route('home') }}" class="brand relative ml-8 inline-flex lg:ml-0" aria-label="Cattie.uk home"><i data-lucide="cat" stroke-width="1.25" class="absolute -left-11 top-[calc(50%+3px)] h-9 w-9 -translate-y-1/2 text-coral" aria-hidden="true"></i>Cattie<span>.</span>uk<span class="absolute left-0 top-[calc(100%-6px)] whitespace-nowrap pl-[2px] font-sans text-[8px] font-light tracking-[2px] text-muted">PRINTED IN THE UK</span></a>
             <div class="flex items-center gap-4 lg:hidden">
                 <div class="relative" @click.outside="mobileAccountOpen=false">
-                    <button type="button" class="cursor-pointer rounded-full p-1 text-ink" @click="mobileAccountOpen=!mobileAccountOpen" :aria-expanded="mobileAccountOpen" aria-label="Sign in"><i data-lucide="user-round" class="h-5 w-5" aria-hidden="true"></i></button>
+                    <button type="button" class="cursor-pointer rounded-full p-1 {{ request()->routeIs('account.*') ? 'text-coral' : 'text-ink' }}" @click="mobileAccountOpen=!mobileAccountOpen" :aria-expanded="mobileAccountOpen" aria-label="My Account"><i data-lucide="user-round" class="h-5 w-5" aria-hidden="true"></i></button>
                     <div x-show="mobileAccountOpen" x-cloak class="absolute right-0 top-full z-50 mt-3 w-48 rounded-2xl border border-rose/25 bg-white p-2 text-sm font-semibold shadow-2xl">
-                        <a href="#" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">My Account</a>
-                        <a href="#" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">Sign In / Register</a>
+                        @auth<a href="{{ route('account.index') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">My Account</a><a href="{{ route('account.orders.index') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">My Orders</a><form method="POST" action="{{ route('logout', [], false) }}">@csrf<button type="submit" class="block w-full rounded-xl px-4 py-3 text-left hover:bg-blush/40 hover:text-coral">Sign out</button></form>
+                        @else<a href="{{ route('login') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">Sign in</a><a href="{{ route('register') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">Create an account</a>@endauth
                     </div>
                 </div>
                 <a href="{{ route('cart.index') }}" class="relative rounded-full p-1 {{ request()->routeIs('cart.*') ? 'text-coral' : 'text-ink' }}" aria-label="Basket"><i data-lucide="shopping-cart" class="h-5 w-5" aria-hidden="true"></i>@if($basketItemCount > 0)<span class="absolute -right-2 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-coral px-1 text-[10px] font-bold leading-none text-white" aria-label="{{ $basketItemCount }} items in basket">{{ $basketItemCount }}</span>@endif</a>
@@ -46,10 +46,10 @@
             <a class="nav-link" href="{{ route('home') }}#how-it-works">How it works</a>
             <a class="nav-link" href="#">Track Order</a>
             <div class="relative" @click.outside="desktopAccountOpen=false">
-                <button type="button" class="nav-link inline-flex cursor-pointer items-center gap-1" @click="desktopAccountOpen=!desktopAccountOpen" :aria-expanded="desktopAccountOpen">Sign in</button>
+                <button type="button" class="nav-link inline-flex cursor-pointer items-center gap-1 {{ request()->routeIs('account.*') ? 'text-coral' : '' }}" @click="desktopAccountOpen=!desktopAccountOpen" :aria-expanded="desktopAccountOpen">@auth My Account @else Sign in @endauth</button>
                 <div x-show="desktopAccountOpen" x-cloak class="absolute right-0 top-full z-50 mt-3 w-48 rounded-2xl border border-rose/25 bg-white p-2 shadow-2xl">
-                    <a href="#" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">My Account</a>
-                    <a href="#" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">Sign In / Register</a>
+                    @auth<a href="{{ route('account.index') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">My Account</a><a href="{{ route('account.orders.index') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">My Orders</a><form method="POST" action="{{ route('logout', [], false) }}">@csrf<button type="submit" class="block w-full rounded-xl px-4 py-3 text-left hover:bg-blush/40 hover:text-coral">Sign out</button></form>
+                    @else<a href="{{ route('login') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">Sign in</a><a href="{{ route('register') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">Create an account</a>@endauth
                 </div>
             </div>
             <a class="nav-link inline-flex items-center gap-2 {{ request()->routeIs('cart.*') ? 'text-coral' : '' }}" href="{{ route('cart.index') }}">Basket @if($basketItemCount > 0)<span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-coral px-1 text-[11px] font-bold leading-none text-white" aria-label="{{ $basketItemCount }} items in basket">{{ $basketItemCount }}</span>@endif</a>

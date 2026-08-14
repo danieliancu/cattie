@@ -210,7 +210,7 @@ class CheckoutController extends Controller
     private function ownedOrder(string $orderNumber, Request $request, GuestContext $guest): Order
     {
         $order = Order::query()->where('number', $orderNumber)->firstOrFail();
-        abort_unless($guest->owns($order->access_token_hash, $request), 404);
+        abort_unless($guest->owns($order->access_token_hash, $request) || ($request->user() && $order->user_id === $request->user()->id), 404);
 
         return $order;
     }

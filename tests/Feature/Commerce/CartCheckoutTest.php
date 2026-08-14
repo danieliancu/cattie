@@ -12,6 +12,7 @@ use App\Models\Cart;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ShippingMethod;
+use App\Models\User;
 use Database\Seeders\ShippingMethodSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,20 @@ use Tests\TestCase;
 class CartCheckoutTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_authenticated_checkout_prefills_email_and_links_order_to_customer(): void
+    {
+        [$session] = $this->approved();
+        $user = User::factory()->create(['email' => 'customer@example.com', 'is_admin' => false]);
+        $this->actingAs($user)->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id));
+        $cart = Cart::query()->firstOrFail();
+        $this->actingAs($user)->withCookie('cattie_guest_token', 'owner-secret')->get(route('checkout.show'))->assertOk()->assertSee('value="customer@example.com"', false);
+        $payload = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => fake()->uuid(), 'shipping_method_id' => ShippingMethod::query()->value('id'), 'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'order-email@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A1AA', 'country' => 'GB'];
+        $this->actingAs($user)->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $payload)->assertRedirect();
+        $order = $cart->fresh()->convertedOrder;
+        $this->assertSame($user->id, $order->user_id);
+        $this->assertSame('order-email@example.com', $order->email);
+    }
 
     public function test_preview_can_be_added_directly_and_is_approved_in_the_same_action(): void
     {
@@ -102,6 +117,7 @@ class CartCheckoutTest extends TestCase
         $payload = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => fake()->uuid(), 'shipping_method_id' => $express->id, 'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'mia@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A1AA', 'country' => 'GB'];
         $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $payload)->assertRedirect();
         $order = $cart->fresh()->convertedOrder;
+        $this->assertNull($order->user_id);
         $this->assertSame($express->id, $order->shipping_method_id);
         $this->assertSame('ROYAL_MAIL_24_TRACKED', $order->shipping_method_snapshot['provider_service_code']);
 

@@ -21,4 +21,22 @@ enum OrderStatus: string
     case FulfilmentFailed = 'fulfilment_failed';
     case Cancelled = 'cancelled';
     case Refunded = 'refunded';
+
+    public function customerLabel(): string
+    {
+        return match ($this) {
+            self::Draft, self::Personalising, self::GeneratingArtwork, self::AwaitingApproval, self::Approved => 'Being prepared',
+            self::AwaitingPayment => 'Awaiting payment',
+            self::Paid => 'Paid',
+            self::PreparingPrintAsset => 'Preparing your order',
+            self::SubmittedToFulfilment => 'Sent to production',
+            self::InProduction => 'In production',
+            self::Shipped => 'Shipped',
+            self::Delivered => 'Delivered',
+            self::GenerationFailed, self::FulfilmentFailed => 'Order issue',
+            self::PaymentFailed => 'Payment issue',
+            self::Cancelled => 'Cancelled',
+            self::Refunded => 'Refunded',
+        };
+    }
 }

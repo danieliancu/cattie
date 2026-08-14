@@ -18,7 +18,7 @@ class StartArtworkSession
     {
         [$variant, $style, $snapshot] = $this->validatedConfiguration($product, $input);
         $token = $existingToken ?: Str::random(64);
-        $session = ArtworkSession::query()->create(['public_id' => (string) Str::ulid(), 'access_token_hash' => hash('sha256', $token), 'product_id' => $product->id, 'product_variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation_snapshot' => $snapshot, 'status' => ArtworkSessionStatus::AwaitingUpload, 'expires_at' => now()->addDays(config('artwork.retention_days'))]);
+        $session = ArtworkSession::query()->create(['public_id' => (string) Str::ulid(), 'access_token_hash' => hash('sha256', $token), 'user_id' => auth()->id(), 'product_id' => $product->id, 'product_variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation_snapshot' => $snapshot, 'status' => ArtworkSessionStatus::AwaitingUpload, 'expires_at' => now()->addDays(config('artwork.retention_days'))]);
         $this->analytics->handle('artwork_session_started', $session);
 
         return [$session, $token];

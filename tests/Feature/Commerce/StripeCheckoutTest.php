@@ -17,6 +17,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ShippingMethod;
+use App\Models\User;
 use App\Providers\Payments\StripePaymentProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -108,6 +109,19 @@ class StripeCheckoutTest extends TestCase
         $this->assertArrayNotHasKey('client_secret', $payment->provider_metadata);
         $this->assertArrayNotHasKey('checkout_url', $payment->provider_metadata);
         $this->assertSame(OrderStatus::AwaitingPayment, $order->fresh()->status);
+    }
+
+    public function test_authenticated_customer_can_start_stripe_without_guest_cookie(): void
+    {
+        $user = User::factory()->create(['is_admin' => false]);
+        $order = $this->awaitingOrder([['name' => 'Account Gift', 'variant' => 'Blue', 'price' => 1200, 'quantity' => 1]]);
+        $order->update(['user_id' => $user->id, 'email' => $user->email]);
+
+        $this->actingAs($user)->get(route('checkout.payment', $order->number))->assertOk()->assertSee('stripe-embedded-checkout');
+        $this->actingAs($user)->post(route('checkout.stripe-session', $order->number), ['idempotency_key' => (string) Str::uuid()], ['Accept' => 'application/json'])
+            ->assertOk()->assertJson(['status' => 'pending']);
+        $this->assertSame($user->id, $order->fresh()->user_id);
+        $this->assertCount(1, $this->stripe->created);
     }
 
     public function test_refresh_reuses_open_embedded_session_and_status_reconciles_payment(): void

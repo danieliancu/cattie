@@ -62,7 +62,7 @@ class CreateOrderFromCart
 
             $subtotal = $cart->items->sum(fn ($item) => $item->lineTotalMinor());
             $order = Order::query()->create([
-                'number' => $this->orderNumber(), 'access_token_hash' => $cart->access_token_hash,
+                'number' => $this->orderNumber(), 'access_token_hash' => $cart->access_token_hash, 'user_id' => auth()->id(),
                 'checkout_idempotency_key' => $idempotencyKey, 'email' => $customer['email'],
                 'phone' => $customer['phone'] ?? null, 'status' => OrderStatus::Draft,
                 'currency' => $cart->currency, 'subtotal_minor' => $subtotal, 'discount_minor' => 0,
