@@ -28,7 +28,7 @@ class CartController extends Controller
         abort_unless($guest->owns($session->access_token_hash, $request), 404);
         if ($session->status === ArtworkSessionStatus::PreviewReady) {
             $session->load(['product.designTemplate', 'currentGeneration.assets', 'composedDesigns']);
-            $selection = $request->validate(['asset_id' => ['nullable', 'string'], 'design_id' => ['nullable', 'string']]);
+            $selection = $request->validate(['asset_id' => ['nullable', 'string'], 'design_id' => ['nullable', 'string'], 'render_fingerprint' => ['nullable', 'string', 'size:64']]);
             $asset = isset($selection['asset_id'])
                 ? GenerationAsset::query()->whereKey($selection['asset_id'])->whereHas('generation', fn ($query) => $query->where('artwork_session_id', $session->id))->firstOrFail()
                 : ($session->product->designTemplate
@@ -41,10 +41,12 @@ class CartController extends Controller
                 : null;
             abort_unless($asset, 422);
             if ($session->product->designTemplate) {
+                abort_unless($design && isset($selection['render_fingerprint']) && hash_equals((string) $design->render_fingerprint, $selection['render_fingerprint']), 409, 'The approved preview is out of date.');
                 $asset = $session->currentGeneration?->assets->firstWhere('kind', 'composition_source')
                     ?? $session->currentGeneration?->assets->firstWhere('kind', 'provider_original');
                 abort_unless($asset, 422);
                 $design = $render->handle($session->fresh(), $asset, $design?->character_adjustments ?? []);
+                abort_unless(hash_equals($selection['render_fingerprint'], (string) $design->render_fingerprint), 409, 'The production render does not match the approved preview.');
             }
             $approve->handle($session, $asset, $design);
             $session->refresh();
@@ -60,7 +62,7 @@ class CartController extends Controller
         [$cart] = $resolve->handle($request, false);
         if ($cart) {
             $prices->handle($cart);
-            $cart->load(['items.artworkSession', 'items.generationAsset', 'items.composedDesign', 'items.variant']);
+            $cart->load(['items.artworkSession', 'items.generationAsset', 'items.composedDesign', 'items.variant', 'items.product.images']);
         }
 
         return view('storefront.cart.index', compact('cart'));

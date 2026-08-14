@@ -5,6 +5,7 @@ namespace Tests\Feature\Artwork;
 use App\Domain\Artwork\Actions\ResolveResumableArtworkSession;
 use App\Domain\Artwork\Actions\StartArtworkSession;
 use App\Enums\ArtworkSessionStatus;
+use App\Enums\ArtworkProcessingStage;
 use App\Enums\GenerationStatus;
 use App\Models\ArtworkSession;
 use App\Models\ArtworkStyle;
@@ -37,9 +38,31 @@ class ProductArtworkWorkspaceTest extends TestCase
         $response->assertRedirect(route('products.show', $product->slug));
         $session = ArtworkSession::query()->firstOrFail();
         $page = $this->withCookie('cattie_guest_token', 'workspace-owner')->get(route('products.show', $product->slug));
-        $page->assertOk()->assertSee('Creating your artwork')->assertSee('Creating your illustration')->assertSee('role="dialog"', false)->assertSee($session->public_id);
+        $page->assertOk()->assertSee('Creating your artwork')->assertSee('Creating your illustration')->assertSee('Removing the background')->assertSee('Preparing your preview')->assertSee('Your artwork is ready')->assertSee('View Your Design')->assertSee('role="dialog"', false)->assertSee($session->public_id);
+        $page->assertSee('bg-black/80', false)->assertSee('bg-cover bg-center', false)->assertSee('role="progressbar"', false);
+        $page->assertSee(route('artwork.cancel', $session->public_id))->assertSee('Cancel artwork creation');
+        $this->assertSame(ArtworkProcessingStage::PreparingPhoto, $session->fresh()->processing_stage);
         $this->assertStringContainsString('private', $page->headers->get('Cache-Control'));
         $this->assertStringContainsString('no-store', $page->headers->get('Cache-Control'));
+    }
+
+    public function test_customer_can_force_cancel_an_active_conversion(): void
+    {
+        [$product, $variant, $style] = $this->catalogue();
+        [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id], 'cancel-owner');
+        $upload = $session->uploads()->create(['disk' => 'local', 'storage_key' => 'cancel-input', 'mime_type' => 'image/png', 'size_bytes' => 1, 'sha256' => str_repeat('c', 64)]);
+        $generation = $session->generations()->create([
+            'upload_id' => $upload->id, 'product_id' => $product->id, 'product_variant_id' => $variant->id, 'artwork_style_id' => $style->id,
+            'prompt_key' => 'test', 'prompt_version' => 1, 'resolved_prompt' => 'test', 'provider' => 'fake', 'model' => 'fake',
+            'status' => GenerationStatus::Processing, 'cost_currency' => 'GBP',
+        ]);
+        $session->update(['current_generation_id' => $generation->id, 'status' => ArtworkSessionStatus::Generating]);
+
+        $this->withCookie('cattie_guest_token', 'cancel-owner')->post(route('artwork.cancel', $session->public_id))
+            ->assertRedirect(route('products.show', $product->slug));
+
+        $this->assertSame(GenerationStatus::Cancelled, $generation->fresh()->status);
+        $this->assertSame(ArtworkSessionStatus::AwaitingUpload, $session->fresh()->status);
     }
 
     public function test_bottle_product_starts_with_colour_name_photo_and_preview_in_one_form(): void
@@ -65,8 +88,10 @@ class ProductArtworkWorkspaceTest extends TestCase
             ->assertSee('min-h-24', false)
             ->assertSee('bottle-colour-options grid grid-cols-4', false)
             ->assertSee("12 - nameValue.length) + ' characters left'", false)
-            ->assertSee(':disabled="!photoReady() || !nameValue.trim()"', false)
-            ->assertSee('@change="newPhotoSelected=$event.target.files.length>0"', false)
+            ->assertSee(':disabled="submitting || !photoReady() || !nameValue.trim()"', false)
+            ->assertSee('@submit="submitting = true"', false)
+            ->assertSee('Starting preview', false)
+            ->assertSee('@change="selectPhoto($event)"', false)
             ->assertSee('name="photo"', false)->assertSee('enctype="multipart/form-data"', false)
             ->assertDontSee('Choose your artwork style');
     }
@@ -151,18 +176,41 @@ class ProductArtworkWorkspaceTest extends TestCase
         Storage::fake('local');
         [$product, $variant, $style] = $this->catalogue();
         [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id], 'action-owner');
-        $upload = $session->uploads()->create(['disk' => 'local', 'storage_key' => 'workspace-source.jpg', 'mime_type' => 'image/jpeg', 'size_bytes' => 1, 'sha256' => str_repeat('a', 64)]);
+        Storage::disk('local')->put('workspace-source.jpg', 'original-photo');
+        $upload = $session->uploads()->create(['disk' => 'local', 'storage_key' => 'workspace-source.jpg', 'mime_type' => 'image/jpeg', 'size_bytes' => 14, 'sha256' => str_repeat('a', 64)]);
         $generation = $session->generations()->create(['upload_id' => $upload->id, 'product_id' => $product->id, 'product_variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'prompt_key' => 'test', 'prompt_version' => 1, 'resolved_prompt' => 'safe', 'provider' => 'fake', 'model' => 'fake', 'status' => GenerationStatus::Succeeded, 'cost_currency' => 'GBP']);
         Storage::disk('local')->put('workspace-preview.webp', 'preview');
         $asset = $generation->assets()->create(['kind' => 'web_preview', 'disk' => 'local', 'storage_key' => 'workspace-preview.webp', 'mime_type' => 'image/webp']);
-        $session->update(['current_upload_id' => $upload->id, 'current_generation_id' => $generation->id, 'status' => ArtworkSessionStatus::PreviewReady]);
+        $session->update(['current_upload_id' => $upload->id, 'current_generation_id' => $generation->id, 'status' => ArtworkSessionStatus::PreviewReady, 'processing_stage' => ArtworkProcessingStage::Ready]);
         $productUrl = route('products.show', $product->slug);
 
         $this->withCookie('cattie_guest_token', 'intruder')->get(route('artwork.status', $session->public_id))->assertNotFound();
-        $this->withCookie('cattie_guest_token', 'action-owner')->get(route('artwork.status', $session->public_id))->assertOk()->assertJsonPath('status', 'preview_ready');
+        $this->withCookie('cattie_guest_token', 'action-owner')->get(route('artwork.status', $session->public_id))->assertOk()
+            ->assertJsonPath('status', 'preview_ready')->assertJsonPath('stage', 'ready')->assertJsonPath('progress', 100)->assertJsonPath('view_url', $productUrl);
+        $this->withCookie('cattie_guest_token', 'intruder')->get(route('artwork.original', $session->public_id))->assertNotFound();
+        $this->withCookie('cattie_guest_token', 'action-owner')->get(route('artwork.original', $session->public_id))->assertOk()->assertHeader('Content-Type', 'image/jpeg');
         $this->withCookie('cattie_guest_token', 'action-owner')->post(route('artwork.regenerate', $session->public_id))->assertRedirect($productUrl);
         $this->withCookie('cattie_guest_token', 'action-owner')->post(route('artwork.approve', $session->public_id), ['asset_id' => $asset->id])->assertRedirect($productUrl);
         $this->withCookie('cattie_guest_token', 'action-owner')->post(route('artwork.change', $session->public_id))->assertRedirect($productUrl);
+    }
+
+    public function test_polling_maps_real_processing_stages_to_progress_below_one_hundred(): void
+    {
+        [$product, $variant, $style] = $this->catalogue();
+        [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id], 'progress-owner');
+        $session->update(['status' => ArtworkSessionStatus::Generating]);
+
+        foreach ([
+            ArtworkProcessingStage::PreparingPhoto->value => 10,
+            ArtworkProcessingStage::CreatingIllustration->value => 30,
+            ArtworkProcessingStage::RemovingBackground->value => 55,
+            ArtworkProcessingStage::PreparingPreview->value => 80,
+        ] as $stage => $progress) {
+            $session->update(['processing_stage' => $stage]);
+            $this->withCookie('cattie_guest_token', 'progress-owner')->get(route('artwork.status', $session->public_id))
+                ->assertOk()->assertJsonPath('stage', $stage)->assertJsonPath('progress', $progress)->assertJsonPath('view_url', null);
+            $this->assertLessThan(100, $progress);
+        }
     }
 
     private function catalogue(): array

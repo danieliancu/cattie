@@ -124,6 +124,7 @@ class CatalogueSeeder extends Seeder
                             'default' => [
                                 'width' => ($printResolutions[$colour] ?? [2750, 2279])[0],
                                 'height' => ($printResolutions[$colour] ?? [2750, 2279])[1],
+                                'dpi' => 300,
                             ],
                         ],
                     ],
@@ -223,7 +224,7 @@ class CatalogueSeeder extends Seeder
                         'placement' => 'wraparound',
                         'physical_print_area' => ['width' => 230, 'height' => 170, 'unit' => 'mm'],
                         'print_areas' => [
-                            'default' => ['width' => 2717, 'height' => 2008, 'derived_from' => '230x170mm_at_300dpi', 'supplier_template_validated' => false],
+                            'default' => ['width' => 2717, 'height' => 2008, 'dpi' => 300, 'derived_from' => '230x170mm_at_300dpi', 'supplier_template_validated' => false],
                         ],
                     ],
                     'is_active' => true,

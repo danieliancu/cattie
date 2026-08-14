@@ -28,7 +28,7 @@ class PurgeExpiredArtworkSessions extends Command
                     }
                 }
                 foreach ($session->composedDesigns as $design) {
-                    Storage::disk($design->disk)->delete([$design->storage_key, $design->preview_storage_key]);
+                    Storage::disk($design->disk)->delete(array_filter([$design->storage_key, $design->preview_storage_key, $design->editor_background_storage_key]));
                 }
                 $session->delete();
             }

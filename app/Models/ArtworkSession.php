@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ArtworkSessionStatus;
+use App\Enums\ArtworkProcessingStage;
 use App\Models\Concerns\UsesUlids;
 use Illuminate\Database\Eloquent\Model;
 
@@ -16,7 +17,7 @@ class ArtworkSession extends Model
 
     protected function casts(): array
     {
-        return ['status' => ArtworkSessionStatus::class, 'personalisation_snapshot' => 'array', 'approved_at' => 'datetime', 'expires_at' => 'datetime'];
+        return ['status' => ArtworkSessionStatus::class, 'processing_stage' => ArtworkProcessingStage::class, 'personalisation_snapshot' => 'array', 'approved_at' => 'datetime', 'expires_at' => 'datetime'];
     }
 
     public function product()

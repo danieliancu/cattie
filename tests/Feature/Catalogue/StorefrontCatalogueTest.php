@@ -53,14 +53,30 @@ class StorefrontCatalogueTest extends TestCase
             ->assertDontSee('INTERNAL-A3')->assertDontSee('secret-provider')->assertDontSee('PROVIDER-987');
     }
 
-    public function test_recommended_style_must_be_supported_or_page_falls_back(): void
+    public function test_product_page_shows_style_choices_without_selecting_a_fallback_recommendation(): void
     {
         $product = Product::factory()->create(['slug' => 'styled-gift']);
         $supported = ArtworkStyle::query()->create(['name' => 'Supported', 'slug' => 'supported', 'prompt_key' => 'supported', 'is_active' => true]);
+        $alsoSupported = ArtworkStyle::query()->create(['name' => 'Also Supported', 'slug' => 'also-supported', 'prompt_key' => 'also_supported', 'is_active' => true]);
         $unsupported = ArtworkStyle::query()->create(['name' => 'Unsupported', 'slug' => 'unsupported', 'prompt_key' => 'unsupported', 'is_active' => true]);
-        $product->artworkStyles()->attach($supported);
+        $product->artworkStyles()->attach([$supported->id, $alsoSupported->id]);
         $product->update(['recommended_artwork_style_id' => $unsupported->id]);
 
-        $this->get(route('products.show', $product->slug))->assertOk()->assertSee('Supported')->assertSee('Recommended')->assertDontSee('Unsupported');
+        $this->get(route('products.show', $product->slug))->assertOk()
+            ->assertSee('Choose your artwork style')->assertSee('Supported')->assertSee('Also Supported')
+            ->assertDontSee('Recommended')->assertDontSee('Unsupported')
+            ->assertSee('style:null', false);
+    }
+
+    public function test_product_with_one_style_submits_it_without_showing_a_selector(): void
+    {
+        $product = Product::factory()->create(['slug' => 'one-style-gift']);
+        $style = ArtworkStyle::query()->create(['name' => 'Only Style', 'slug' => 'only-style', 'prompt_key' => 'only_style', 'is_active' => true]);
+        $product->artworkStyles()->attach($style);
+
+        $this->get(route('products.show', $product->slug))->assertOk()
+            ->assertDontSee('Choose your artwork style')
+            ->assertSee('type="hidden" name="artwork_style_id" value="'.$style->id.'"', false)
+            ->assertDontSee('Only Style');
     }
 }

@@ -62,6 +62,29 @@
         </nav>
     </div>
 </header>
+@if($errors->any())
+<div x-data="{open:true}" x-show="open" x-cloak @keydown.escape.window="open=false" class="fixed inset-0 z-[100] flex items-center justify-center bg-ink/55 p-4" role="presentation">
+    <div @click.outside="open=false" class="relative w-full max-w-lg rounded-[2rem] bg-white p-7 shadow-2xl sm:p-9" role="dialog" aria-modal="true" aria-labelledby="validation-error-title">
+        <button type="button" @click="open=false" class="absolute right-5 top-5 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-2xl text-muted hover:bg-rose/20 hover:text-ink" aria-label="Close error message">×</button>
+        <p class="eyebrow text-red-700">Please check your details</p>
+        <h2 id="validation-error-title" class="mt-3 pr-10 font-display text-3xl">We couldn’t continue</h2>
+        <ul class="mt-5 space-y-2 text-sm leading-6 text-red-800">@foreach($errors->all() as $error)<li class="flex gap-2"><span aria-hidden="true">•</span><span>{{ $error }}</span></li>@endforeach</ul>
+        @if($errors->has('photo'))
+            <div class="mt-6 rounded-2xl border border-rose/30 bg-cream p-4">
+                <h3 class="font-bold">Photo requirements</h3>
+                <ul class="mt-2 space-y-1 text-sm leading-6 text-muted">
+                    <li>JPEG, PNG or WebP format</li>
+                    <li>Maximum file size: {{ config('artwork.upload.max_kb') / 1024 }} MB</li>
+                    <li>Width and height: {{ config('artwork.upload.min_dimension') }}–{{ config('artwork.upload.max_dimension') }} px</li>
+                    <li>For best results, use a clear portrait with the full person visible.</li>
+                </ul>
+            </div>
+        @endif
+        @if($errors->has('pricing_hash'))<a class="mt-5 inline-block font-bold text-coral underline" href="{{ route('cart.index') }}">Review basket</a>@endif
+        <button type="button" @click="open=false" class="button-primary mt-6 w-full cursor-pointer">Try again</button>
+    </div>
+</div>
+@endif
 <main id="main-content">{{ $slot }}</main>
 <footer class="mt-24 border-t border-rose/20 bg-cream/95">
     <div class="shell grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-[2.2fr_1fr_1fr_1fr] lg:gap-10">

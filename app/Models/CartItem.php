@@ -55,4 +55,16 @@ class CartItem extends Model
     {
         return $this->unit_price_minor * $this->quantity;
     }
+
+    public function productThumbnail(): ?ProductImage
+    {
+        $images = $this->product?->images?->where('is_active', true)->sortBy('sort_order');
+        if (! $images || $images->isEmpty()) {
+            return null;
+        }
+
+        return $images->firstWhere('is_product', true)
+            ?? $images->firstWhere('is_primary', true)
+            ?? $images->first();
+    }
 }

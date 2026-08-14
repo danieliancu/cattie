@@ -25,7 +25,7 @@ class ApproveArtwork
             }
             $session->loadMissing('product');
             if ($session->product->designTemplate) {
-                if (! $design || $design->artwork_session_id !== $session->id || $design->generation_asset_id !== $asset->id || ! in_array($design->status, [ComposedDesignStatus::Ready, ComposedDesignStatus::Approved], true)) {
+                if (! $design || $design->artwork_session_id !== $session->id || $design->generation_asset_id !== $asset->id || ! $design->resolved_manifest || ! $design->render_fingerprint || ! in_array($design->status, [ComposedDesignStatus::Ready, ComposedDesignStatus::Approved], true)) {
                     throw ValidationException::withMessages(['design' => 'That product design cannot be approved.']);
                 }
             }

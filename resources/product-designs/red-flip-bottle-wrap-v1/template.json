@@ -3,6 +3,12 @@
   "version": 1,
   "coordinate_system": "normalized",
   "output_size": { "source": "variant_print_area", "print_area": "default" },
+  "character_clip": { "mode": "canvas" },
+  "preview_surface": {
+    "variant_option": "colour",
+    "colours_by_variant": { "white": "#ffffff", "silver": "#d9dde2" },
+    "fallback_colour": "#ffffff"
+  },
   "safe_zones": [
     { "id": "primary-content", "x": 0.02, "y": 0.025, "width": 0.96, "height": 0.95 }
   ],
@@ -13,7 +19,15 @@
     "offset_x": 0.0,
     "offset_y": 0.01,
     "max_width": 0.36,
-    "max_height": 0.84
+    "max_height": 0.84,
+    "adjustment_limits": {
+      "scale_min": 0.7,
+      "scale_max": 1.3,
+      "offset_x_min": -0.08,
+      "offset_x_max": 0.08,
+      "offset_y_min": -0.05,
+      "offset_y_max": 0.05
+    }
   },
   "layers": [
     {

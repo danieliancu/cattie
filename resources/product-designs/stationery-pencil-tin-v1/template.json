@@ -3,6 +3,8 @@
   "version": 1,
   "coordinate_system": "normalized",
   "output_size": { "source": "variant_print_area", "print_area": "default" },
+  "character_clip": { "mode": "canvas" },
+  "preview_surface": { "colour": "#ffffff" },
   "safe_zones": [
     { "id": "primary-content", "x": 0.025, "y": 0.06, "width": 0.95, "height": 0.88 }
   ],
@@ -16,7 +18,7 @@
     "max_height": 0.82
   },
   "layers": [
-    { "id": "background", "type": "solid", "colour": "#ffffff" },
+    { "id": "background", "type": "transparent" },
     {
       "id": "repeated-name",
       "type": "personalisation_text_pattern",

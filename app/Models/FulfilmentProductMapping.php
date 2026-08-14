@@ -22,17 +22,18 @@ class FulfilmentProductMapping extends Model
         return $this->belongsTo(ProductVariant::class, 'product_variant_id');
     }
 
-    /** @return array{width: int, height: int} */
+    /** @return array{width: int, height: int, dpi: int} */
     public function requiredPrintResolution(string $printArea = 'default'): array
     {
         $resolution = $this->configuration['print_areas'][$printArea] ?? null;
         $width = filter_var($resolution['width'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         $height = filter_var($resolution['height'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $dpi = filter_var($resolution['dpi'] ?? 300, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 
-        if ($width === false || $height === false) {
+        if ($width === false || $height === false || $dpi === false) {
             throw new DomainException("Required print resolution [{$printArea}] is missing for fulfilment mapping [{$this->id}].");
         }
 
-        return ['width' => $width, 'height' => $height];
+        return ['width' => $width, 'height' => $height, 'dpi' => $dpi];
     }
 }

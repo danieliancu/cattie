@@ -56,7 +56,7 @@ class ProductVariant extends Model
         return Money::format($this->price_override_minor ?? $this->price_minor, $this->currency);
     }
 
-    /** @return array{width: int, height: int} */
+    /** @return array{width: int, height: int, dpi: int} */
     public function requiredPrintResolution(string $printArea = 'default'): array
     {
         $mappings = $this->fulfilmentMappings()->where('is_active', true)->get();

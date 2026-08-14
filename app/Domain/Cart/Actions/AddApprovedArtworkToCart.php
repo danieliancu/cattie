@@ -19,7 +19,7 @@ class AddApprovedArtworkToCart
         if ($session->status !== ArtworkSessionStatus::Approved || ! $session->approvedAsset || $session->approvedAsset->generation->status !== GenerationStatus::Succeeded) {
             throw ValidationException::withMessages(['artwork' => 'Approve your artwork before adding it to your basket.']);
         }
-        if ($session->product->designTemplate && (! $session->approvedComposedDesign || $session->approvedComposedDesign->generation_asset_id !== $session->approved_generation_asset_id)) {
+        if ($session->product->designTemplate && (! $session->approvedComposedDesign || ! $session->approvedComposedDesign->resolved_manifest || ! $session->approvedComposedDesign->render_fingerprint || $session->approvedComposedDesign->generation_asset_id !== $session->approved_generation_asset_id)) {
             throw ValidationException::withMessages(['artwork' => 'Approve your product design before adding it to your basket.']);
         }
         if (! $session->product->is_active || ! $session->variant?->is_active) {

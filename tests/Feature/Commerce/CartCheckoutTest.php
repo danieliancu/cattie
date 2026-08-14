@@ -21,7 +21,9 @@ class CartCheckoutTest extends TestCase
 
     public function test_preview_can_be_added_directly_and_is_approved_in_the_same_action(): void
     {
-        [$session] = $this->approved();
+        [$session, $variant] = $this->approved();
+        $session->product->images()->create(['disk' => 'public', 'storage_key' => 'products/generic.png', 'role' => 'primary', 'is_product' => false, 'alt_text' => 'Generic product', 'is_active' => true, 'sort_order' => 0]);
+        $session->product->images()->create(['product_variant_id' => $variant->id, 'disk' => 'public', 'storage_key' => 'products/selected-variant.png', 'role' => 'gallery', 'is_product' => true, 'alt_text' => 'Selected variant', 'is_active' => true, 'sort_order' => 1]);
         $session->approvedAsset?->update(['is_selected' => false, 'selected_at' => null]);
         $session->update(['status' => ArtworkSessionStatus::PreviewReady, 'current_generation_id' => $session->approvedAsset->generation_id, 'approved_generation_asset_id' => null, 'approved_at' => null]);
 
@@ -33,7 +35,9 @@ class CartCheckoutTest extends TestCase
         $this->assertSame(ArtworkSessionStatus::Approved, $session->fresh()->status);
         $this->assertDatabaseHas('cart_items', ['artwork_session_id' => $session->id]);
         $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('cart.index'))
-            ->assertOk()->assertSee('aria-label="1 items in basket"', false);
+            ->assertOk()->assertSee('aria-label="1 items in basket"', false)
+            ->assertSee('products/selected-variant.png', false)->assertDontSee('products/generic.png', false)
+            ->assertSee('h-auto w-[100px]', false)->assertSee('ml-auto w-[100px] shrink-0 text-center text-base font-bold', false);
     }
 
     private function approved(string $token = 'owner-secret'): array

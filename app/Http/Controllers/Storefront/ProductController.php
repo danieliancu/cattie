@@ -62,8 +62,7 @@ class ProductController extends Controller
             return redirect()->route('products.show', $redirect->product->slug, 301);
         }
 
-        $recommendedStyle = $product->artworkStyles->firstWhere('id', $product->recommended_artwork_style_id)
-            ?? $product->artworkStyles->first();
+        $recommendedStyle = $product->artworkStyles->firstWhere('id', $product->recommended_artwork_style_id);
 
         $defaultOptions = $product->preview_configuration['default_variant_options'] ?? [];
         $defaultVariant = $product->variants->first(fn ($variant) => collect($defaultOptions)->every(

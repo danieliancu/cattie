@@ -48,10 +48,36 @@ class StationeryPencilTinProductTest extends TestCase
             $this->assertSame($expectedSkus[$variant->options['colour']], $mapping->provider_sku);
             $this->assertSame(['width' => 188, 'depth' => 80, 'height' => 24, 'unit' => 'mm'], $mapping->configuration['physical_product_dimensions']);
             $this->assertSame(['width' => 185, 'height' => 76, 'unit' => 'mm'], $mapping->configuration['physical_print_area']);
-            $this->assertSame(['width' => 2185, 'height' => 898], $variant->requiredPrintResolution());
+            $this->assertSame(['width' => 2185, 'height' => 898, 'dpi' => 300], $variant->requiredPrintResolution());
             $this->assertSame(300, $mapping->configuration['print_areas']['default']['dpi']);
             $this->assertFalse($mapping->configuration['print_areas']['default']['supplier_template_validated']);
         }
+    }
+
+    public function test_product_page_allows_the_customer_to_choose_between_both_artwork_styles(): void
+    {
+        $product = $this->product();
+        $product->update(['recommended_artwork_style_id' => null]);
+
+        $this->get(route('products.show', $product->slug))->assertOk()
+            ->assertSee('Choose your artwork style')
+            ->assertSee('<strong>Cartoon</strong>', false)
+            ->assertSee('Hand Drawn')
+            ->assertSee('x-show="!hasExistingPhoto || removeExistingPhoto"', false)
+            ->assertSee('images/artwork-styles/storybook-cartoon.png')
+            ->assertSee('images/artwork-styles/hand-drawn.png')
+            ->assertSee('style:null', false)
+            ->assertDontSee('type="hidden" name="artwork_style_id"', false);
+    }
+
+    public function test_product_description_preserves_the_admin_textarea_layout(): void
+    {
+        $product = $this->product();
+        $product->update(['description' => "First paragraph.\n\nSecond paragraph.\nThird line."]);
+
+        $this->get(route('products.show', $product->slug))->assertOk()
+            ->assertSee('whitespace-pre-line', false)
+            ->assertSee("First paragraph.\n\nSecond paragraph.\nThird line.");
     }
 
     public function test_template_uses_white_insert_and_variant_defined_name_colours(): void
@@ -59,7 +85,9 @@ class StationeryPencilTinProductTest extends TestCase
         $definition = $this->product()->designTemplate->definition();
         $pattern = collect($definition['layers'])->firstWhere('type', 'personalisation_text_pattern');
 
-        $this->assertSame(['id' => 'background', 'type' => 'solid', 'colour' => '#ffffff'], $definition['layers'][0]);
+        $this->assertSame(['id' => 'background', 'type' => 'transparent'], $definition['layers'][0]);
+        $this->assertSame(['colour' => '#ffffff'], $definition['preview_surface']);
+        $this->assertSame(['mode' => 'canvas'], $definition['character_clip']);
         $this->assertSame('name', $pattern['field']);
         $this->assertSame('colour', $pattern['variant_option']);
         $this->assertSame(['blue' => '#2563EB', 'pink' => '#EC4899', 'silver' => '#6B7280'], $pattern['colours_by_variant']);
@@ -114,7 +142,10 @@ class StationeryPencilTinProductTest extends TestCase
             $design = app(RenderComposedDesign::class)->handle($session, $asset);
             $image = imagecreatefrompng(Storage::disk('local')->path($design->storage_key));
             $this->assertSame([2185, 898], [imagesx($image), imagesy($image)]);
-            $this->assertSame([255, 255, 255], $this->rgbAt($image, 0, 0));
+            $this->assertSame([300, 300], imageresolution($image));
+            $this->assertEqualsWithDelta(185, imagesx($image) / 300 * 25.4, .1);
+            $this->assertEqualsWithDelta(76, imagesy($image) / 300 * 25.4, .1);
+            $this->assertSame(127, (imagecolorat($image, 0, 0) >> 24) & 0x7F);
             $this->assertTrue($this->containsColour($image, ...$rgb), "The {$colour} name colour was not rendered.");
             imagedestroy($image);
         }
@@ -133,7 +164,8 @@ class StationeryPencilTinProductTest extends TestCase
 
         $response->assertOk()->assertJsonStructure(['variant_id', 'design_id', 'asset_id', 'preview_url', 'layout_url', 'background_url']);
         $updated = $session->composedDesigns()->findOrFail($response->json('design_id'));
-        $image = imagecreatefrompng(Storage::disk('local')->path($updated->storage_key));
+        $this->assertNull($updated->storage_key);
+        $image = imagecreatefromstring(Storage::disk('local')->get($updated->preview_storage_key));
         $this->assertSame($pink->id, $updated->product_variant_id);
         $this->assertSame(['scale' => 1.1, 'offset_x' => .02, 'offset_y' => -.01], $updated->character_adjustments);
         $this->assertTrue($this->containsColour($image, 236, 72, 153));

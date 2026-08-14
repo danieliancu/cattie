@@ -61,7 +61,7 @@ class LunchboxProductTest extends TestCase
             $mapping = $variants[$colour]->fulfilmentMappings()->firstOrFail();
             $this->assertSame('treatpod', $mapping->provider);
             $this->assertSame(['width' => 165, 'height' => 102, 'unit' => 'mm'], $mapping->configuration['physical_print_area']);
-            $this->assertSame(['width' => 1949, 'height' => 1205], $variants[$colour]->requiredPrintResolution());
+            $this->assertSame(['width' => 1949, 'height' => 1205, 'dpi' => 300], $variants[$colour]->requiredPrintResolution());
             $this->assertSame(300, $mapping->configuration['print_areas']['default']['dpi']);
             $this->assertFalse($mapping->configuration['print_areas']['default']['supplier_template_validated']);
         }

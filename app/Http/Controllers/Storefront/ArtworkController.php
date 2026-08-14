@@ -8,6 +8,8 @@ use App\Domain\Artwork\Actions\RequestArtworkGeneration;
 use App\Domain\Artwork\Actions\StartArtworkSession;
 use App\Domain\Artwork\Actions\StoreArtworkUpload;
 use App\Enums\ArtworkSessionStatus;
+use App\Enums\ArtworkProcessingStage;
+use App\Enums\GenerationStatus;
 use App\Http\Controllers\Controller;
 use App\Models\ArtworkSession;
 use App\Models\ComposedDesign;
@@ -75,7 +77,7 @@ class ArtworkController extends Controller
                     ->latest('created_at')
                     ->latest('id')
                     ->first();
-                $render->handle($session->fresh(), $asset, $currentDesign?->character_adjustments ?? []);
+                $render->handlePreview($session->fresh(), $asset, $currentDesign?->character_adjustments ?? []);
             }
             $session->update(['status' => ArtworkSessionStatus::PreviewReady]);
 
@@ -89,7 +91,20 @@ class ArtworkController extends Controller
 
     private function validatedPhoto(Request $request)
     {
-        return $request->validate(['photo' => ['required', 'file', 'max:'.config('artwork.upload.max_kb'), 'mimetypes:image/jpeg,image/png,image/webp', 'dimensions:min_width='.config('artwork.upload.min_dimension').',min_height='.config('artwork.upload.min_dimension').',max_width='.config('artwork.upload.max_dimension').',max_height='.config('artwork.upload.max_dimension')]])['photo'];
+        $min = config('artwork.upload.min_dimension');
+        $max = config('artwork.upload.max_dimension');
+        $maxMb = config('artwork.upload.max_kb') / 1024;
+
+        return $request->validate(
+            ['photo' => ['required', 'file', 'max:'.config('artwork.upload.max_kb'), 'mimetypes:image/jpeg,image/png,image/webp', "dimensions:min_width={$min},min_height={$min},max_width={$max},max_height={$max}"]],
+            [
+                'photo.required' => 'Please choose a photo to continue.',
+                'photo.file' => 'The selected photo could not be read as a file.',
+                'photo.max' => "The photo must be no larger than {$maxMb} MB.",
+                'photo.mimetypes' => 'The photo must be a JPEG, PNG or WebP image.',
+                'photo.dimensions' => "The photo dimensions must be between {$min} × {$min} px and {$max} × {$max} px.",
+            ],
+        )['photo'];
     }
 
     public function status(string $publicId, Request $request): JsonResponse
@@ -97,9 +112,53 @@ class ArtworkController extends Controller
         $session = $this->owned($publicId, $request)->load('currentGeneration.assets');
         $preview = $session->currentGeneration?->assets->firstWhere('kind', 'web_preview');
 
-        return response()->json(['status' => $session->status->value, 'message' => match ($session->status) {
-            ArtworkSessionStatus::PreparingPhoto => 'Preparing your photo…',ArtworkSessionStatus::Generating => 'Creating your illustration…',ArtworkSessionStatus::PreviewReady => 'Your artwork is ready',ArtworkSessionStatus::Failed => 'We couldn’t create your artwork this time.',ArtworkSessionStatus::Approved => 'Artwork approved',ArtworkSessionStatus::Expired => 'This artwork session has expired.',default => 'Upload your photo'
-        }, 'preview_url' => $preview ? route('artwork.assets', [$session->public_id, $preview->id]) : null, 'poll_interval_ms' => config('artwork.poll_interval_ms')]);
+        $stage = $session->processing_stage ?? match ($session->status) {
+            ArtworkSessionStatus::PreparingPhoto => ArtworkProcessingStage::PreparingPhoto,
+            ArtworkSessionStatus::Generating => ArtworkProcessingStage::CreatingIllustration,
+            ArtworkSessionStatus::PreviewReady, ArtworkSessionStatus::Approved => ArtworkProcessingStage::Ready,
+            default => null,
+        };
+
+        return response()->json([
+            'status' => $session->status->value,
+            'stage' => $stage?->value,
+            'message' => $session->status === ArtworkSessionStatus::Failed ? 'We couldn’t create your artwork this time.' : ($stage?->label() ?? 'Upload your photo'),
+            'progress' => $stage?->progress() ?? 0,
+            'preview_url' => $preview ? route('artwork.assets', [$session->public_id, $preview->id]) : null,
+            'view_url' => $stage === ArtworkProcessingStage::Ready ? route('products.show', $session->product->slug) : null,
+            'poll_interval_ms' => config('artwork.poll_interval_ms'),
+        ]);
+    }
+
+    public function original(string $publicId, Request $request)
+    {
+        $session = $this->owned($publicId, $request)->load('currentUpload');
+        $upload = $session->currentUpload;
+        abort_unless($upload && Storage::disk($upload->disk)->exists($upload->storage_key), 404);
+
+        return Storage::disk($upload->disk)->response($upload->storage_key, null, [
+            'Content-Type' => $upload->mime_type,
+            'Cache-Control' => 'private, max-age=300',
+        ]);
+    }
+
+    public function cancel(string $publicId, Request $request): RedirectResponse
+    {
+        $session = $this->owned($publicId, $request)->load(['product', 'currentGeneration']);
+        abort_unless(in_array($session->status, [ArtworkSessionStatus::PreparingPhoto, ArtworkSessionStatus::Generating], true), 409);
+
+        if ($session->currentGeneration && in_array($session->currentGeneration->status, [GenerationStatus::Queued, GenerationStatus::Pending, GenerationStatus::Processing], true)) {
+            $session->currentGeneration->update([
+                'status' => GenerationStatus::Cancelled,
+                'failure_reason' => 'Cancelled by customer.',
+                'failure_category' => 'cancelled',
+                'is_retryable' => false,
+                'completed_at' => now(),
+            ]);
+        }
+        $session->update(['status' => ArtworkSessionStatus::AwaitingUpload]);
+
+        return redirect()->route('products.show', $session->product->slug);
     }
 
     public function asset(string $publicId, GenerationAsset $asset, Request $request, RenderComposedDesign $render)
@@ -143,7 +202,7 @@ class ArtworkController extends Controller
             'offset_x' => ['required', 'numeric', 'min:-1000', 'max:1000'],
             'offset_y' => ['required', 'numeric', 'min:-1000', 'max:1000'],
         ]);
-        $updated = $render->handle($session, $design->generationAsset, array_map('floatval', $adjustments));
+        $updated = $render->handlePreview($session, $design->generationAsset, array_map('floatval', $adjustments));
 
         return response()->json([
             'design_id' => $updated->id,
@@ -151,6 +210,7 @@ class ArtworkController extends Controller
             'preview_url' => route('artwork.designs', [$session->public_id, $updated]),
             'layout_url' => route('artwork.design-layout', [$session->public_id, $updated]),
             'background_url' => route('artwork.design-editor-background', [$session->public_id, $updated]),
+            'render_fingerprint' => $updated->render_fingerprint,
         ]);
     }
 
@@ -163,12 +223,17 @@ class ArtworkController extends Controller
         return redirect()->route('products.show', $session->product->slug);
     }
 
-    public function approve(string $publicId, Request $request, ApproveArtwork $action): RedirectResponse
+    public function approve(string $publicId, Request $request, ApproveArtwork $action, RenderComposedDesign $render): RedirectResponse
     {
         $session = $this->owned($publicId, $request);
-        $validated = $request->validate(['asset_id' => 'required|string', 'design_id' => 'nullable|string']);
+        $validated = $request->validate(['asset_id' => 'required|string', 'design_id' => 'nullable|string', 'render_fingerprint' => 'nullable|string|size:64']);
         $asset = GenerationAsset::query()->findOrFail($validated['asset_id']);
         $design = isset($validated['design_id']) ? ComposedDesign::query()->findOrFail($validated['design_id']) : null;
+        if ($design && $session->product->designTemplate) {
+            abort_unless(isset($validated['render_fingerprint']) && hash_equals((string) $design->render_fingerprint, $validated['render_fingerprint']), 409, 'The approved preview is out of date.');
+            $design = $render->handle($session, $asset, $design->character_adjustments ?? []);
+            abort_unless(hash_equals($validated['render_fingerprint'], (string) $design->render_fingerprint), 409, 'The production render does not match the approved preview.');
+        }
         $action->handle($session, $asset, $design);
 
         return redirect()->route('products.show', $session->product->slug);
@@ -193,7 +258,7 @@ class ArtworkController extends Controller
 
         if ($request->expectsJson()) {
             try {
-                $design = $render->handle($session->fresh(), $currentDesign->generationAsset, $currentDesign->character_adjustments ?? []);
+                $design = $render->handlePreview($session->fresh(), $currentDesign->generationAsset, $currentDesign->character_adjustments ?? []);
             } catch (\Throwable $e) {
                 $session->update(['product_variant_id' => $previousVariantId]);
                 report($e);
@@ -203,12 +268,14 @@ class ArtworkController extends Controller
 
             return response()->json([
                 'variant_id' => $variant->id,
-                'surface_colour' => $session->product->preview_configuration['design_surfaces_by_variant'][strtolower($variant->options['colour'] ?? '')] ?? '#f4efe7',
+                'surface_colour' => $design->load('variant')->previewSurfaceColour(),
                 'design_id' => $design->id,
                 'asset_id' => $design->generation_asset_id,
                 'preview_url' => route('artwork.designs', [$session->public_id, $design]),
                 'layout_url' => route('artwork.design-layout', [$session->public_id, $design]),
                 'background_url' => route('artwork.design-editor-background', [$session->public_id, $design]),
+                'render_fingerprint' => $design->render_fingerprint,
+                'design_geometry' => $this->designGeometry($design),
             ]);
         }
 
@@ -238,7 +305,7 @@ class ArtworkController extends Controller
         $session->update(['personalisation_snapshot' => $snapshot]);
 
         try {
-            $design = $render->handle($session->fresh(), $asset, $currentDesign->character_adjustments ?? []);
+            $design = $render->handlePreview($session->fresh(), $asset, $currentDesign->character_adjustments ?? []);
         } catch (\Throwable $e) {
             $session->update(['personalisation_snapshot' => $previousSnapshot]);
             report($e);
@@ -252,6 +319,7 @@ class ArtworkController extends Controller
             'preview_url' => route('artwork.designs', [$session->public_id, $design]),
             'layout_url' => route('artwork.design-layout', [$session->public_id, $design]),
             'background_url' => route('artwork.design-editor-background', [$session->public_id, $design]),
+            'render_fingerprint' => $design->render_fingerprint,
         ]);
     }
 
@@ -280,5 +348,15 @@ class ArtworkController extends Controller
         ]);
 
         return redirect()->route('products.show', $session->product->slug);
+    }
+
+    private function designGeometry(ComposedDesign $design): array
+    {
+        $configuration = $design->resolved_manifest['configuration'] ?? [];
+
+        return [
+            'character' => $configuration['character'] ?? [],
+            'character_clip' => $configuration['character_clip'] ?? ['mode' => 'canvas'],
+        ];
     }
 }

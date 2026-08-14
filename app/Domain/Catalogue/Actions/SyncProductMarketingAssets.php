@@ -114,7 +114,7 @@ class SyncProductMarketingAssets
                 $sortOrder = $variantOffset + $asset['rank'] + ($asset['role'] === 'gallery' ? $index : 0);
                 $product->images()->updateOrCreate(
                     ['storage_key' => $storageKey],
-                    ['product_variant_id' => $variant->id, 'disk' => 'public', 'alt_text' => "{$colour} {$product->name}, {$description}", 'sort_order' => $sortOrder],
+                    ['product_variant_id' => $variant->id, 'disk' => 'public', 'alt_text' => "{$colour} {$product->name}, {$description}", 'role' => $asset['role'], 'is_product' => $asset['role'] === 'primary' && $variant->is($variants->first()), 'sort_order' => $sortOrder],
                 );
                 $discovered[] = ['variant' => mb_strtolower($folder), 'filename' => $asset['filename'], 'role' => $asset['role'], 'storage_key' => $storageKey];
             }

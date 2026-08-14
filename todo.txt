@@ -1,0 +1,9 @@
+| Etapă                           | Status         | Unde suntem                                                              |
+| ------------------------------- | -------------- | ------------------------------------------------------------------------ |
+| **1. AI REAL**                  | ✅ **FĂCUT**    | Real OpenAI + Storybook + Hand Drawn + processing + preview funcționează |
+| **2. Print-ready**              | 🔴 **NEFĂCUT** | Avem model/scaffold, nu avem pipeline-ul care produce fișierul de tipar  |
+| **3. Fulfilment TreatPod REAL** | 🔴 **NEFĂCUT** | Avem contracte/mappings, nu trimitem încă nicio comandă reală            |
+| **4. Webhooks complete**        | 🟡 **PARȚIAL** | Primim și stocăm webhook-uri; nu actualizăm încă order/shipment/tracking |
+| **5. Stripe REAL**              | 🔴 **NEFĂCUT** | Doar FakePaymentProvider                                                 |
+| **6. Email-uri**                | 🔴 **NEFĂCUT** | Nu există încă emailurile comerciale                                     |
+| **7. Production**               | 🟡 **PARȚIAL** | Privacy/retention au început; monitoring/backup/deploy etc. nu sunt gata |

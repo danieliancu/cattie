@@ -3,6 +3,12 @@
   "version": 4,
   "coordinate_system": "normalized",
   "output_size": { "source": "variant_print_area", "print_area": "default" },
+  "character_clip": { "mode": "canvas" },
+  "preview_surface": {
+    "variant_option": "colour",
+    "colours_by_variant": { "black": "#17191f", "gray": "#777d86", "grey": "#777d86", "navy": "#18558b", "red": "#bd2738" },
+    "fallback_colour": "#5f9fd6"
+  },
   "safe_zones": [
     { "id": "primary-content", "x": 0.02, "y": 0.025, "width": 0.96, "height": 0.95 }
   ],
@@ -13,22 +19,18 @@
     "offset_x": 0.0,
     "offset_y": 0.01,
     "max_width": 0.36,
-    "max_height": 0.84
+    "max_height": 0.84,
+    "adjustment_limits": {
+      "scale_min": 0.7,
+      "scale_max": 1.3,
+      "offset_x_min": -0.08,
+      "offset_x_max": 0.08,
+      "offset_y_min": -0.05,
+      "offset_y_max": 0.05
+    }
   },
   "layers": [
-    {
-      "id": "background",
-      "type": "solid",
-      "variant_option": "colour",
-      "colours_by_variant": {
-        "black": "#17191f",
-        "gray": "#777d86",
-        "grey": "#777d86",
-        "navy": "#18558b",
-        "red": "#bd2738"
-      },
-      "fallback_colour": "#5f9fd6"
-    },
+    { "id": "background", "type": "transparent" },
     {
       "id": "repeated-name",
       "type": "personalisation_text_pattern",

@@ -3,6 +3,8 @@
   "version": 1,
   "coordinate_system": "normalized",
   "output_size": { "source": "variant_print_area", "print_area": "default" },
+  "character_clip": { "mode": "canvas" },
+  "preview_surface": { "colour": "#ffffff" },
   "safe_zones": [
     { "id": "primary-content", "x": 0.035, "y": 0.055, "width": 0.93, "height": 0.89 }
   ],

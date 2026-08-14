@@ -29,6 +29,8 @@ Route::post('/products/{product:slug}/artwork', [ArtworkController::class, 'star
 Route::get('/artwork/{publicId}', [ArtworkController::class, 'show'])->name('artwork.show');
 Route::post('/artwork/{publicId}/upload', [ArtworkController::class, 'upload'])->middleware('throttle:30,1')->name('artwork.upload');
 Route::get('/artwork/{publicId}/status', [ArtworkController::class, 'status'])->middleware('throttle:30,1')->name('artwork.status');
+Route::get('/artwork/{publicId}/original', [ArtworkController::class, 'original'])->name('artwork.original');
+Route::post('/artwork/{publicId}/cancel', [ArtworkController::class, 'cancel'])->middleware('throttle:10,1')->name('artwork.cancel');
 Route::get('/artwork/{publicId}/assets/{asset}', [ArtworkController::class, 'asset'])->name('artwork.assets');
 Route::get('/artwork/{publicId}/designs/{design}', [ArtworkController::class, 'design'])->name('artwork.designs');
 Route::get('/artwork/{publicId}/designs/{design}/editor-background', [ArtworkController::class, 'designEditorBackground'])->name('artwork.design-editor-background');

@@ -110,7 +110,7 @@ class CatalogueDomainTest extends TestCase
         ];
         foreach ($bottle->variants as $variant) {
             [$width, $height] = $expectedResolutions[$variant->options['colour']];
-            $this->assertSame(['width' => $width, 'height' => $height], $variant->requiredPrintResolution());
+            $this->assertSame(['width' => $width, 'height' => $height, 'dpi' => 300], $variant->requiredPrintResolution());
         }
 
         $treatPodBottle = Product::query()->where('slug', 'water-bottle-with-red-flip-lid')->firstOrFail();
@@ -123,7 +123,7 @@ class CatalogueDomainTest extends TestCase
             $mapping = $variant->fulfilmentMappings()->firstOrFail();
             $this->assertSame('treatpod', $mapping->provider);
             $this->assertSame(['width' => 230, 'height' => 170, 'unit' => 'mm'], $mapping->configuration['physical_print_area']);
-            $this->assertSame(['width' => 2717, 'height' => 2008], $variant->requiredPrintResolution());
+            $this->assertSame(['width' => 2717, 'height' => 2008, 'dpi' => 300], $variant->requiredPrintResolution());
             $this->assertFalse($mapping->configuration['print_areas']['default']['supplier_template_validated']);
         }
         $newDefinition = $treatPodBottle->designTemplate->definition();
@@ -148,8 +148,8 @@ class CatalogueDomainTest extends TestCase
         $this->get('/products')->assertOk()->assertSee('products/water-bottle-with-red-flip-lid/catalogue/white/anna-product.png')->assertDontSee('products/cattie-water-bottle/catalogue/bottle01.jpg');
         $this->get('/products/cattie-water-bottle')->assertNotFound();
         $this->get('/products/water-bottle-with-red-flip-lid')->assertOk()
-            ->assertSee('Product examples')
-            ->assertSee('Personalised examples shown for inspiration.')
+            ->assertDontSee('Product examples')
+            ->assertDontSee('Personalised examples shown for inspiration.')
             ->assertDontSee('Prodigi')->assertDontSee('650 ml')
             ->assertSee('products/water-bottle-with-red-flip-lid/catalogue/white/anna-product.png')
             ->assertSee('products/water-bottle-with-red-flip-lid/catalogue/silver/adrian-product.png')
@@ -218,6 +218,18 @@ class CatalogueDomainTest extends TestCase
         $variant->fulfilmentMappings()->create(['provider' => 'one', 'provider_sku' => 'ONE', 'configuration' => ['print_areas' => ['default' => ['width' => 10, 'height' => 10]]], 'is_active' => true]);
         $variant->fulfilmentMappings()->create(['provider' => 'two', 'provider_sku' => 'TWO', 'configuration' => ['print_areas' => ['default' => ['width' => 20, 'height' => 20]]], 'is_active' => true]);
 
+        $this->expectException(DomainException::class);
+        $variant->requiredPrintResolution();
+    }
+
+    public function test_print_resolution_defaults_to_300_dpi_and_rejects_invalid_dpi(): void
+    {
+        $variant = ProductVariant::factory()->create();
+        $mapping = $variant->fulfilmentMappings()->create(['provider' => 'test', 'provider_sku' => 'DPI', 'configuration' => ['print_areas' => ['default' => ['width' => 2185, 'height' => 898]]], 'is_active' => true]);
+
+        $this->assertSame(['width' => 2185, 'height' => 898, 'dpi' => 300], $variant->requiredPrintResolution());
+
+        $mapping->update(['configuration' => ['print_areas' => ['default' => ['width' => 2185, 'height' => 898, 'dpi' => 0]]]]);
         $this->expectException(DomainException::class);
         $variant->requiredPrintResolution();
     }

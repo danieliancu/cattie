@@ -76,8 +76,14 @@ class FakeEndToEndJourneyTest extends TestCase
         $session->refresh();
         $design = $session->composedDesigns()->firstOrFail();
         $asset = $design->generationAsset;
+        $this->assertLessThanOrEqual(1200, max($design->width, $design->height));
+        $this->assertNull($design->storage_key);
+        Storage::disk('local')->assertExists($design->preview_storage_key);
+        $this->withCookie('cattie_guest_token', 'bottle-owner')->post(route('artwork.approve', $session->public_id), ['asset_id' => $asset->id, 'design_id' => $design->id, 'render_fingerprint' => $design->render_fingerprint])->assertRedirect();
+        $design = $session->fresh()->approvedComposedDesign;
         $this->assertSame([2717, 2008], [$design->width, $design->height]);
-        $this->withCookie('cattie_guest_token', 'bottle-owner')->post(route('artwork.approve', $session->public_id), ['asset_id' => $asset->id, 'design_id' => $design->id])->assertRedirect();
+        $this->assertNotNull($design->storage_key);
+        Storage::disk('local')->assertExists($design->storage_key);
         $this->withCookie('cattie_guest_token', 'bottle-owner')->post(route('artwork.cart', $session->public_id))->assertRedirect(route('cart.index'));
         $cart = Cart::query()->firstOrFail();
         $checkout = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => (string) Str::uuid(), 'first_name' => 'Maria', 'last_name' => 'Smith', 'email' => 'maria@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A 1AA', 'country' => 'GB'];

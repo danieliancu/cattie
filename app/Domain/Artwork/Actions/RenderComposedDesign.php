@@ -13,22 +13,44 @@ use Throwable;
 
 class RenderComposedDesign
 {
-    public function __construct(private ResolveDesignTemplateVersion $resolveTemplateVersion) {}
+    public function __construct(private ResolveDesignManifest $manifests) {}
 
     private const PREVIEW_MAX_EDGE = 1200;
 
     public function handle(ArtworkSession $session, GenerationAsset $asset, array $characterAdjustments = []): ComposedDesign
     {
+        return $this->render($session, $asset, $characterAdjustments, true);
+    }
+
+    public function handlePreview(ArtworkSession $session, GenerationAsset $asset, array $characterAdjustments = []): ComposedDesign
+    {
+        return $this->render($session, $asset, $characterAdjustments, false);
+    }
+
+    private function render(ArtworkSession $session, GenerationAsset $asset, array $characterAdjustments, bool $fullResolution): ComposedDesign
+    {
         $session->loadMissing(['product.designTemplate', 'variant']);
-        $templateVersion = $session->product && $session->variant ? $this->resolveTemplateVersion->handle($session->product, $session->variant) : null;
-        $template = $templateVersion?->template ?? $session->product?->designTemplate;
+        $template = $session->product?->designTemplate;
         if (! $template || ! $session->variant || $asset->generation?->artwork_session_id !== $session->id) {
             throw new RuntimeException('The design inputs are incomplete.');
         }
 
-        $definition = $templateVersion?->configuration ?? $template->definition();
+        $manifest = $this->manifests->handle($session);
+        $definition = $manifest['configuration'];
+        $characterAdjustments = $this->constrainCharacterAdjustments(
+            $characterAdjustments,
+            $definition['character'] ?? [],
+            $definition['character']['adjustment_limits'] ?? [],
+        );
         $printArea = $definition['output_size']['print_area'] ?? 'default';
         $size = $session->variant->requiredPrintResolution($printArea);
+        if (! $fullResolution) {
+            $scale = min(1, self::PREVIEW_MAX_EDGE / max($size['width'], $size['height']));
+            $size = [
+                'width' => max(1, (int) round($size['width'] * $scale)),
+                'height' => max(1, (int) round($size['height'] * $scale)),
+            ];
+        }
         $personalisation = collect($session->personalisation_snapshot)->keyBy('key');
         $sourceBytes = Storage::disk($asset->disk)->get($asset->storage_key);
         $source = $sourceBytes === null ? false : @imagecreatefromstring($sourceBytes);
@@ -69,18 +91,23 @@ class RenderComposedDesign
                 }
                 match ($layer['type'] ?? null) {
                     'transparent' => [$this->renderTransparent($canvas), $this->renderTransparent($editorCanvas)],
-                    'solid' => $this->renderSolid($canvas, $layer, $session->variant->options ?? []),
                     'personalisation_text_pattern' => [$this->renderTextPattern($canvas, $layer, $definition, $personalisation->all(), $template, $session->variant->options ?? []), $this->renderTextPattern($editorCanvas, $layer, $definition, $personalisation->all(), $template, $session->variant->options ?? [])],
-                    'generation_asset' => $this->renderGenerationAsset($canvas, $source, $layer, $definition[$layer['config'] ?? ''] ?? [], $characterAdjustments),
+                    'generation_asset' => $this->renderGenerationAsset($canvas, $source, $layer, $definition[$layer['config'] ?? ''] ?? [], $characterAdjustments, $definition['character_clip'] ?? ['mode' => 'canvas']),
                     default => throw new RuntimeException('The design template contains an unsupported layer.'),
                 };
             }
 
-            ob_start();
-            if (! imagepng($canvas, null, 6)) {
-                throw new RuntimeException('The full design could not be encoded.');
+            $fullBytes = null;
+            if ($fullResolution) {
+                if (! imageresolution($canvas, $size['dpi'], $size['dpi'])) {
+                    throw new RuntimeException('The print resolution metadata could not be set.');
+                }
+                ob_start();
+                if (! imagepng($canvas, null, 6)) {
+                    throw new RuntimeException('The full design could not be encoded.');
+                }
+                $fullBytes = ob_get_clean();
             }
-            $fullBytes = ob_get_clean();
             $previewBytes = $this->previewBytes($canvas);
         } catch (Throwable $e) {
             if (ob_get_level()) {
@@ -95,31 +122,57 @@ class RenderComposedDesign
 
         $directory = "artwork-sessions/{$session->public_id}/composed-designs";
         $token = bin2hex(random_bytes(20));
-        $fullKey = "{$directory}/{$token}.png";
+        $fullKey = $fullResolution ? "{$directory}/{$token}.png" : null;
         $previewKey = "{$directory}/{$token}-preview.webp";
         $editorBackgroundKey = "{$directory}/{$token}-editor-background.webp";
-        if (! Storage::disk('local')->put($fullKey, $fullBytes) || ! Storage::disk('local')->put($previewKey, $previewBytes) || ! $editorBackgroundBytes || ! Storage::disk('local')->put($editorBackgroundKey, $editorBackgroundBytes)) {
-            Storage::disk('local')->delete([$fullKey, $previewKey, $editorBackgroundKey]);
+        $fullStored = ! $fullResolution || ($fullKey && $fullBytes && Storage::disk('local')->put($fullKey, $fullBytes));
+        if (! $fullStored || ! Storage::disk('local')->put($previewKey, $previewBytes) || ! $editorBackgroundBytes || ! Storage::disk('local')->put($editorBackgroundKey, $editorBackgroundBytes)) {
+            Storage::disk('local')->delete(array_filter([$fullKey, $previewKey, $editorBackgroundKey]));
             throw new RuntimeException('The composed design could not be stored.');
         }
 
         try {
+            $fingerprint = $this->manifests->fingerprint($manifest, $session, $asset, $characterAdjustments);
+
             return $session->composedDesigns()->create([
                 'product_variant_id' => $session->product_variant_id,
                 'generation_asset_id' => $asset->id,
                 'product_design_template_id' => $template->id,
-                'design_template_version_id' => $templateVersion?->id,
-                'template_version' => $templateVersion?->version ?? $template->version,
+                'design_template_version_id' => $manifest['template_version_id'],
+                'template_version' => $manifest['template_version'],
                 'personalisation_snapshot' => $session->personalisation_snapshot,
                 'character_adjustments' => $characterAdjustments,
+                'resolved_manifest' => $manifest,
+                'render_fingerprint' => $fingerprint,
                 'width' => $size['width'], 'height' => $size['height'], 'format' => 'png',
                 'disk' => 'local', 'storage_key' => $fullKey, 'preview_storage_key' => $previewKey, 'editor_background_storage_key' => $editorBackgroundKey,
                 'status' => ComposedDesignStatus::Ready,
             ]);
         } catch (Throwable $e) {
-            Storage::disk('local')->delete([$fullKey, $previewKey, $editorBackgroundKey]);
+            Storage::disk('local')->delete(array_filter([$fullKey, $previewKey, $editorBackgroundKey]));
             throw $e;
         }
+    }
+
+    private function constrainCharacterAdjustments(array $adjustments, array $character, array $limits): array
+    {
+        if ($adjustments === []) {
+            return [];
+        }
+
+        $characterX = (float) ($character['x'] ?? .5);
+        $characterY = (float) ($character['y'] ?? .5);
+        $offsetXMin = max((float) ($limits['offset_x_min'] ?? -1000), -$characterX);
+        $offsetXMax = min((float) ($limits['offset_x_max'] ?? 1000), 1 - $characterX);
+        $offsetYMin = max((float) ($limits['offset_y_min'] ?? -1000), -$characterY);
+        $scale = max((float) ($limits['scale_min'] ?? .1), min((float) ($limits['scale_max'] ?? 50), (float) ($adjustments['scale'] ?? 1)));
+        $offsetYMax = 1 - $characterY + (((float) ($character['max_height'] ?? .84) * $scale) / 2);
+
+        return [
+            'scale' => $scale,
+            'offset_x' => max($offsetXMin, min($offsetXMax, (float) ($adjustments['offset_x'] ?? 0))),
+            'offset_y' => max($offsetYMin, min($offsetYMax, (float) ($adjustments['offset_y'] ?? 0))),
+        ];
     }
 
     /** @return array{x:int,y:int,width:int,height:int} */
@@ -336,7 +389,7 @@ class RenderComposedDesign
         }
     }
 
-    public function renderGenerationAsset(\GdImage $canvas, \GdImage $source, array $layer, array $config, array $adjustments = []): void
+    public function renderGenerationAsset(\GdImage $canvas, \GdImage $source, array $layer, array $config, array $adjustments = [], array $clipPolicy = ['mode' => 'canvas']): void
     {
         if (($layer['fit'] ?? null) !== 'contain') {
             throw new RuntimeException('Generation artwork must use contain fitting.');
@@ -352,12 +405,14 @@ class RenderComposedDesign
         $x = $rect['x'] + (int) round(($rect['width'] - $width) / 2 + $offsetX);
         $y = $rect['y'] + (int) round(($rect['height'] - $height) / 2 + $offsetY);
 
-        // Crop the resampling operation to the printable area. At high zoom levels
+        $clip = $this->clipBox($clipPolicy, imagesx($canvas), imagesy($canvas));
+
+        // Crop the resampling operation to the configured visible area. At high zoom levels
         // the virtual destination can be enormous, while only this small window is visible.
-        $visibleLeft = max($rect['x'], $x);
-        $visibleTop = max($rect['y'], $y);
-        $visibleRight = min($rect['x'] + $rect['width'], $x + $width);
-        $visibleBottom = min($rect['y'] + $rect['height'], $y + $height);
+        $visibleLeft = max($clip['x'], $x);
+        $visibleTop = max($clip['y'], $y);
+        $visibleRight = min($clip['x'] + $clip['width'], $x + $width);
+        $visibleBottom = min($clip['y'] + $clip['height'], $y + $height);
         if ($visibleRight <= $visibleLeft || $visibleBottom <= $visibleTop) {
             return;
         }
@@ -371,7 +426,7 @@ class RenderComposedDesign
         $sourceWidth = max(1, min($sourceRect['x'] + $sourceRect['width'], (int) ceil($sourceRight)) - $sourceX);
         $sourceHeight = max(1, min($sourceRect['y'] + $sourceRect['height'], (int) ceil($sourceBottom)) - $sourceY);
 
-        imagesetclip($canvas, $rect['x'], $rect['y'], $rect['x'] + $rect['width'] - 1, $rect['y'] + $rect['height'] - 1);
+        imagesetclip($canvas, $clip['x'], $clip['y'], $clip['x'] + $clip['width'] - 1, $clip['y'] + $clip['height'] - 1);
         imagealphablending($canvas, true);
         imagecopyresampled(
             $canvas,
@@ -386,6 +441,24 @@ class RenderComposedDesign
             $sourceHeight,
         );
         imagesetclip($canvas, 0, 0, imagesx($canvas) - 1, imagesy($canvas) - 1);
+    }
+
+    /** @return array{x:int,y:int,width:int,height:int} */
+    private function clipBox(array $clip, int $canvasWidth, int $canvasHeight): array
+    {
+        if (($clip['mode'] ?? 'canvas') === 'canvas') {
+            return ['x' => 0, 'y' => 0, 'width' => $canvasWidth, 'height' => $canvasHeight];
+        }
+
+        $x = min($canvasWidth - 1, max(0, (int) round((float) $clip['x'] * $canvasWidth)));
+        $y = min($canvasHeight - 1, max(0, (int) round((float) $clip['y'] * $canvasHeight)));
+
+        return [
+            'x' => $x,
+            'y' => $y,
+            'width' => max(1, min($canvasWidth - $x, (int) round((float) $clip['width'] * $canvasWidth))),
+            'height' => max(1, min($canvasHeight - $y, (int) round((float) $clip['height'] * $canvasHeight))),
+        ];
     }
 
     /** @return array{x:int,y:int,width:int,height:int} */

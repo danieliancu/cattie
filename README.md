@@ -1,5 +1,7 @@
 # Cattie.uk
 
+Current architecture, implemented functionality, operational status and known gaps are maintained in [APPLICATION_STATUS.md](APPLICATION_STATUS.md). Update that living report whenever the application changes.
+
 ## Local End-to-End Development
 
 The local journey uses fake AI and fake payment providers. No OpenAI, Stripe or fulfilment credentials are required.

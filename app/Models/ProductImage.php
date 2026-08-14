@@ -14,7 +14,7 @@ class ProductImage extends Model
 
     protected function casts(): array
     {
-        return ['is_primary' => 'boolean', 'is_active' => 'boolean'];
+        return ['is_primary' => 'boolean', 'is_product' => 'boolean', 'is_active' => 'boolean'];
     }
 
     public function product()

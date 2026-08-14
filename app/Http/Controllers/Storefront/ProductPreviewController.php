@@ -12,7 +12,7 @@ class ProductPreviewController extends Controller
     {
         abort_unless($request->hasValidSignature() && $request->user()?->is_admin, 403);
         $product->load(['images', 'defaultVariant', 'variants' => fn ($q) => $q->active()->ordered(), 'artworkStyles', 'recommendedArtworkStyle', 'personalisationFields', 'categories']);
-        $recommendedStyle = $product->artworkStyles->firstWhere('id', $product->recommended_artwork_style_id) ?? $product->artworkStyles->first();
+        $recommendedStyle = $product->artworkStyles->firstWhere('id', $product->recommended_artwork_style_id);
         $defaultVariant = $product->defaultVariant ?? $product->variants->first();
         $defaultImage = $product->primaryImage();
         $session = null;

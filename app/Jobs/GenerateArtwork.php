@@ -8,6 +8,7 @@ use App\Data\ImageGenerationRequest;
 use App\Domain\Artwork\Actions\RecordAnalyticsEvent;
 use App\Domain\Artwork\Actions\RenderComposedDesign;
 use App\Enums\ArtworkSessionStatus;
+use App\Enums\ArtworkProcessingStage;
 use App\Enums\GenerationStatus;
 use App\Exceptions\ImageGenerationException;
 use App\Models\Generation;
@@ -76,11 +77,16 @@ class GenerateArtwork implements ShouldBeUnique, ShouldQueue
                 return new ImageGenerationReference($frozen['key'], $frozen['role'], $configured['path'], $frozen['mime'], $frozen['sha256']);
             })->values()->all();
             $result = $provider->generate(new ImageGenerationRequest($generation->id, $generation->resolved_prompt, Storage::disk($input->disk)->path($input->storage_key), $input->mime_type, $generation->model, $generation->quality, $generation->output_size, $generation->candidate_count, (int) ($generation->parameters['generation_sequence'] ?? 1), $requirements, $references));
+            if ($generation->fresh()->status === GenerationStatus::Cancelled) {
+                return;
+            }
             $sourceSize = @getimagesizefromstring($result->contents);
             if ($sourceSize === false) {
                 throw new ImageGenerationException('Generated artwork is not a valid image.', 'invalid_response', 'malformed_image', false);
             }
+            $generation->artworkSession->update(['processing_stage' => ArtworkProcessingStage::RemovingBackground]);
             $processed = ($backgroundRemoval ?? app(BackgroundRemovalProcessor::class))->process($result->contents, $requirements);
+            $generation->artworkSession->update(['processing_stage' => ArtworkProcessingStage::PreparingPreview]);
 
             $previewImage = @imagecreatefromstring($processed['contents']);
             $previewBytes = $processed['contents'];
@@ -134,9 +140,9 @@ class GenerateArtwork implements ShouldBeUnique, ShouldQueue
             unset($previewBytes, $result);
             gc_collect_cycles();
             if ($generation->artworkSession->product->designTemplate) {
-                ($renderDesign ?? app(RenderComposedDesign::class))->handle($generation->artworkSession, $asset);
+                ($renderDesign ?? app(RenderComposedDesign::class))->handlePreview($generation->artworkSession, $asset);
             }
-            $generation->artworkSession->update(['status' => ArtworkSessionStatus::PreviewReady]);
+            $generation->artworkSession->update(['status' => ArtworkSessionStatus::PreviewReady, 'processing_stage' => ArtworkProcessingStage::Ready]);
             $analytics->handle('generation_succeeded', $generation);
         } catch (ImageGenerationException $e) {
             if ($storedKeys !== []) {

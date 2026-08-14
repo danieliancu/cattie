@@ -3,6 +3,7 @@
 namespace App\Domain\Artwork\Actions;
 
 use App\Enums\ArtworkSessionStatus;
+use App\Enums\ArtworkProcessingStage;
 use App\Jobs\NormaliseArtworkUpload;
 use App\Models\ArtworkSession;
 use App\Models\Upload;
@@ -43,7 +44,7 @@ final class StoreArtworkUpload
                 'sha256' => hash('sha256', $bytes),
                 'expires_at' => $session->expires_at,
             ]);
-            $session->update(['current_upload_id' => $upload->id, 'status' => ArtworkSessionStatus::PreparingPhoto]);
+            $session->update(['current_upload_id' => $upload->id, 'status' => ArtworkSessionStatus::PreparingPhoto, 'processing_stage' => ArtworkProcessingStage::PreparingPhoto]);
         } catch (\Throwable $e) {
             Storage::disk('local')->delete($key);
             throw $e;

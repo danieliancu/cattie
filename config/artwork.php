@@ -20,5 +20,17 @@ return [
             'role' => 'style_only',
             'sha256' => '0c9c129b9389a81fe1adfbba03ca150997e168f3cf44236de61d9870c4c7d53d',
         ],
+        'hand-drawn-v3' => [
+            'path' => base_path('resources/ai/style-references/hand-drawn-v3.png'),
+            'mime' => 'image/png',
+            'role' => 'style_only',
+            'sha256' => '1155ad10792a0efaa2bcb8489789525ab773fbe14876f580585b98bd6eb60dc7',
+        ],
+        'hand-drawn-v4' => [
+            'path' => base_path('resources/ai/style-references/hand-drawn-v4.png'),
+            'mime' => 'image/png',
+            'role' => 'style_only',
+            'sha256' => '0dc842a65929412dcd7d6ef9c32b676442a3142be1d4e2ff17a36484c3cf4568',
+        ],
     ],
 ];

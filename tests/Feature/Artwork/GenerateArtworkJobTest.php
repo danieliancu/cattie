@@ -10,6 +10,7 @@ use App\Domain\Artwork\Actions\RecordAnalyticsEvent;
 use App\Domain\Artwork\Actions\RequestArtworkGeneration;
 use App\Domain\Artwork\Actions\StartArtworkSession;
 use App\Enums\ArtworkSessionStatus;
+use App\Enums\ArtworkProcessingStage;
 use App\Enums\GenerationStatus;
 use App\Exceptions\ImageGenerationException;
 use App\Jobs\GenerateArtwork;
@@ -42,6 +43,7 @@ class GenerateArtworkJobTest extends TestCase
         $this->assertSame('fake-'.$generation->id, $generation->provider_request_id);
         $this->assertEqualsCanonicalizing(['provider_original', 'composition_source', 'web_preview'], $generation->assets->pluck('kind')->all());
         $this->assertSame(ArtworkSessionStatus::PreviewReady, $generation->artworkSession->status);
+        $this->assertSame(ArtworkProcessingStage::Ready, $generation->artworkSession->processing_stage);
     }
 
     public function test_permanent_provider_failure_is_recorded_without_exposing_exception(): void
