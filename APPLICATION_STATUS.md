@@ -22,6 +22,7 @@ Aplicația include în prezent:
 - PNG transparent, full-resolution, cu metadata 300 PPI pentru tipografie;
 - basket, checkout UK, plăți fake și Stripe Embedded Checkout fără catalog Stripe;
 - conturi storefront opționale, autentificare pe sesiune și istoric privat de comenzi;
+- bibliotecă privată `My Characters`, cu salvare explicită și reutilizare locală fără un nou apel AI;
 - modele și stări pentru producție/fulfilment;
 - integrare de catalog și quotes Prodigi și webhook-uri TreatPod;
 - panou administrativ Filament;
@@ -250,6 +251,15 @@ După provider:
 
 Jobul are protecție la retry, curăță fișierele parțiale și salvează costul/usage metadata când sunt disponibile.
 
+### My Characters
+
+- clientul poate salva explicit `composition_source` ca personaj reutilizabil; nu se salvează fotografia originală;
+- PNG-ul transparent și preview-ul WebP sunt copiate independent sub `saved-characters/{user}/{character}` și nu depind de retenția sesiunii originale;
+- guest-ul primește un intent server-side temporar de 30 minute, finalizat automat după registration sau login numai după reverificarea tokenului de ownership;
+- selectorul `Choose your character` afișează personajul curent, personajele salvate compatibile și uploadul unei fotografii noi;
+- reutilizarea creează o nouă Generation locală `Succeeded`, fără Upload, OpenAI sau background removal, cu cost zero și proveniență către SavedCharacter;
+- stilurile nu sunt convertite: un personaj este disponibil numai produselor care suportă ArtworkStyle-ul său.
+
 ## 7. Template-uri și randare WYSIWYG
 
 Template-uri existente:
@@ -370,6 +380,7 @@ Exemplu: `2185 × 898 px / 300 PPI = aproximativ 185 × 76 mm`.
 - basket-ul browserului are prioritate la autentificare, este asociat clientului și primește fără duplicare itemii altui basket activ al contului;
 - comenzile create autentificat primesc `Order.user_id` server-side, iar emailul comenzii rămâne snapshot imuabil;
 - `/account`, `/account/orders` și detaliul comenzii sunt protejate prin auth și interoghează exclusiv `orders.user_id`;
+- `/account/characters` oferă biblioteca privată, preview-uri autorizate și ștergere fără afectarea comenzilor ori generațiilor deja copiate;
 - statusurile au etichete publice prietenoase, iar thumbnails sunt livrate printr-o rută privată scoped la Order și OrderItem;
 - o comandă guest poate fi revendicată individual numai când browserul dovedește tokenul existent și emailul contului coincide; nu există revendicare în masă după email.
 
@@ -425,7 +436,7 @@ Modelele acoperă:
 
 - catalog: Product, ProductVariant, ProductImage, ProductCategory, ArtworkStyle, personalisation fields;
 - template-uri: ProductDesignTemplate, DesignTemplateVersion, assignments;
-- artwork: ArtworkSession, Upload/UploadAsset, Generation/GenerationAsset, ComposedDesign;
+- artwork: ArtworkSession, Upload/UploadAsset, Generation/GenerationAsset, ComposedDesign și SavedCharacter;
 - commerce: User, Cart/CartItem, Order/OrderItem, Payment și ShippingMethod;
 - producție: PrintAsset, FulfilmentProductMapping, FulfilmentSubmission, Shipment;
 - observabilitate: AnalyticsEvent, AdminAuditLog, WebhookEvent, OrderStatusTransition;
@@ -444,6 +455,8 @@ Snapshot-urile de personalizare și artwork sunt păstrate pe entitățile tranz
 - purge șterge uploaduri, generation assets, PNG/WebP și editor backgrounds;
 - retenția implicită pentru artwork este 30 de zile.
 - preview-urile din istoricul comenzilor sunt servite privat numai proprietarului autentificat al Order-ului.
+- personajele salvate au copii private independente sub `saved-characters/{user_id}/{saved_character_id}`; purge-ul artwork nu traversează acest director;
+- ștergerea sursei temporare setează proveniența SavedCharacter la null, fără a elimina biblioteca.
 
 ## 13. Securitate și robustețe
 
@@ -479,7 +492,7 @@ Panoul este disponibil sub `/admin` și include:
 
 ## 15. Rute și suprafețe publice
 
-Aplicația are 69 de rute non-vendor. Grupurile principale:
+Aplicația are 73 de rute non-vendor. Grupurile principale:
 
 - home, products, categories, related content și sitemap;
 - artwork start/show/upload/status/assets/original/regenerate/cancel;
@@ -488,6 +501,7 @@ Aplicația are 69 de rute non-vendor. Grupurile principale:
 - basket quantity/remove;
 - checkout, payment, Stripe embedded session/status, Stripe return și confirmation;
 - register, login/logout, account overview, order history/detail și artwork privat per OrderItem;
+- My Characters: salvare din artwork, bibliotecă, preview privat și ștergere;
 - pagini FAQ, delivery, returns, privacy, terms, payments și cookies;
 - webhook-uri Stripe și TreatPod;
 - resurse admin Filament.
@@ -517,12 +531,13 @@ Acoperirea verifică, între altele:
 - catalogue, mappings și idempotent seeding;
 - Prodigi client și TreatPod webhooks.
 - Stripe Checkout payload, idempotency, redirect/cancel, return race, semnătură, deduplicare, stări async, protecție cross-order și refund.
+- SavedCharacter: copiere exactă și idempotentă, ownership, intent guest, reutilizare locală cu cost zero, preview privat, ștergere sigură și independență față de purge.
 
 Verificări recente trecute:
 
 - testele Stripe, payment și cart: 19 teste, 172 assertions;
 - build Vite production pentru Embedded Checkout;
-- suita completă curentă: 161 teste trecute și 6 eșecuri preexistente/nelegate de Customer Account (artwork regeneration lineage și assertions de markup ale workspace-ului/catalogului);
+- suita completă curentă (verificată independent, rulare reală, 14 august 2026): 168 teste trecute și 5 eșecuri preexistente/nelegate de My Characters (admin, artwork regeneration lineage, workspace/catalogue markup assertions); numărul de eșecuri diferă cu ±1 față de rulările anterioare — pare un test instabil legat de randare, nu o regresie;
 
 - PNG 300 PPI, `pHYs`, alpha și dimensiuni fizice;
 - Pencil Tin final și preview la schimbarea variantei;
@@ -688,3 +703,15 @@ Documentul trebuie să descrie codul care există efectiv. Funcțiile planificat
 - confirmation oferă guest-ului revendicarea opțională a unei singure comenzi, protejată prin token și email;
 - testele Account, Cart, Payment, Stripe și end-to-end au trecut împreună: 33 teste și 335 assertions; suita completă a încheiat cu 161 passed, 6 failed, fără eșec nou în funcționalitatea Account.
 - formularele logout folosesc acțiune relativă pe hostul curent și submit explicit, evitând pierderea cookie-ului de sesiune când mediul local este accesat printr-un hostname diferit.
+
+### 14 august 2026 — My Characters
+
+- introdus modelul SavedCharacter și storage privat independent pentru PNG transparent și preview WebP;
+- adăugată salvarea explicită, idempotentă, inclusiv intentul guest care continuă automat după registration/login;
+- adăugate biblioteca privată, preview-urile scoped și ștergerea fără impact asupra comenzilor sau sesiunilor deja reutilizate;
+- înlocuit blocul simplu de upload cu selectorul comun Current / saved characters / Upload, inclusiv în Change artwork;
+- reutilizarea creează o generație locală reușită, cu cost zero și fără upload, provider AI ori background removal;
+- acoperite salvarea, ownership-ul, reutilizarea cross-product și supraviețuirea după purge prin teste dedicate.
+- testele țintite artwork/account/cart/checkout/Stripe/payment au trecut împreună: 46 teste și 460 assertions; build-ul Vite production a trecut;
+- suita completă a încheiat cu 167 passed și aceleași 6 failures preexistente, fără eșec nou în My Characters.
+- verificare independentă ulterioară (rulare reală, nu doar citire de cod): confirmate cele 15 teste SavedCharacter/ProductArtworkWorkspace (163 assertions) și suita completă cu 168 passed / 5 failures preexistente, niciun eșec nou legat de My Characters; eliminat blocul mort „Upload your photo” din `_workspace.blade.php` (devenise inaccesibil după introducerea selectorului „Choose your character” din `products/show.blade.php`) și adăugată o gardă explicită în `SaveCurrentCharacter` pentru un `composition_source` fără width/height, ca să nu cadă pe o eroare brută de DB.

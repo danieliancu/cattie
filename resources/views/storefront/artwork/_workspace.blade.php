@@ -1,20 +1,6 @@
 <section class="{{ in_array($session->status->value, ['preparing_photo', 'generating']) ? 'fixed inset-0 z-50 overflow-hidden' : 'shell pb-0 pt-4 sm:py-20' }}" @if(in_array($session->status->value, ['preparing_photo', 'generating'])) x-data="artworkProgress(@js(route('artwork.status', $session->public_id)), @js(config('artwork.poll_interval_ms')), @js($session->processing_stage?->value ?? ($session->status->value === 'preparing_photo' ? 'preparing_photo' : 'creating_illustration')))" x-init="start()" @endif>
     <div class="{{ in_array($session->status->value, ['preparing_photo', 'generating']) ? 'h-full w-full' : 'mx-auto w-full min-w-0 max-w-5xl overflow-x-clip' }}">
-        @if($session->status->value === 'awaiting_upload')
-            <div class="mx-auto mt-8 max-w-2xl text-center">
-                <h1 class="font-display text-5xl">Upload your photo</h1>
-                <p class="mt-4 text-muted">Use a clear photo where the face is easy to see.</p>
-                <form action="{{ route('artwork.upload', $session->public_id) }}" method="POST" enctype="multipart/form-data" class="mt-10">
-                    @csrf
-                    <label class="relative flex min-h-72 w-full min-w-0 max-w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[2rem] border-2 border-dashed border-coral/50 bg-white p-8">
-                        <span class="font-display text-3xl">Choose a favourite photo</span>
-                        <span class="mt-3 text-sm text-muted">JPEG, PNG or WebP · up to 10 MB</span>
-                        <input class="absolute inset-0 h-full w-full cursor-pointer opacity-0" type="file" name="photo" accept="image/jpeg,image/png,image/webp" required>
-                    </label>
-                    <button class="button-primary mt-7 w-full">Create my artwork →</button>
-                </form>
-            </div>
-        @elseif(in_array($session->status->value, ['preparing_photo', 'generating']))
+        @if(in_array($session->status->value, ['preparing_photo', 'generating']))
             <div class="absolute inset-0 bg-cover bg-center lg:hidden" style="background-image:url('{{ route('artwork.original', $session->public_id) }}')" aria-hidden="true"></div>
             <div class="artwork-progress-overlay absolute inset-0" aria-hidden="true"></div>
             <div x-show="!ready && !failed" class="pointer-events-none absolute inset-0 z-10 overflow-hidden lg:hidden" aria-hidden="true">
@@ -78,7 +64,7 @@
             @php($templated = (bool) $session->product->designTemplate)
             @php($designs = $session->composedDesigns->sortByDesc('created_at'))
             @php($selectedDesign = $session->approvedComposedDesign ?? $designs->first(fn ($design) => $design->product_variant_id === $session->product_variant_id) ?? $designs->first())
-            @php($selectedAsset = $session->approvedAsset ?? $selectedDesign?->generationAsset ?? $session->currentGeneration?->assets->firstWhere('kind', 'provider_original'))
+            @php($selectedAsset = $session->approvedAsset ?? $selectedDesign?->generationAsset ?? $session->currentGeneration?->assets->firstWhere('kind', 'composition_source') ?? $session->currentGeneration?->assets->firstWhere('kind', 'provider_original'))
             @php($artworkPreview = $selectedAsset?->generation?->assets?->firstWhere('kind', 'web_preview') ?? $session->currentGeneration?->assets->firstWhere('kind', 'web_preview'))
             @php($productExamples = $session->product->images->sortBy('sort_order')->values())
             @php($examplesFollowVariant = $productExamples->contains(fn ($image) => (bool) $image->product_variant_id))
@@ -241,6 +227,10 @@
                         <input type="hidden" name="design_id" :value="selectedDesignId">
                         <button class="cursor-pointer font-bold text-coral underline">Change artwork</button>
                     </form>
+                    <div class="mt-4 text-center" x-data="{saved:@js((bool)($currentSavedCharacter ?? null)),saving:false,async save(){this.saving=true;const response=await fetch(@js(route('artwork.save-character',$session->public_id)),{method:'POST',headers:{'X-CSRF-TOKEN':@js(csrf_token()),'Accept':'application/json'}});const data=await response.json();this.saving=false;if(data.redirect_url){window.location=data.redirect_url;return}if(response.ok)this.saved=true}}">
+                        <a x-show="saved" x-cloak href="{{ route('account.characters.index') }}" class="inline-flex rounded-full bg-emerald-100 px-4 py-2 text-sm font-bold text-emerald-700">Saved ✓</a>
+                        <button x-show="!saved" type="button" @click="save()" :disabled="saving" class="inline-flex rounded-full bg-coral px-4 py-2 text-sm font-bold text-white disabled:opacity-60" x-text="saving ? 'Saving…' : 'Save character'">Save character</button>
+                    </div>
 
                     <div class="mt-10 lg:hidden">
                         <h1 class="font-display text-2xl">{{ $templated ? $session->product->name : ($session->status->value === 'approved' ? 'This is the one.' : 'Your artwork is ready.') }}</h1>

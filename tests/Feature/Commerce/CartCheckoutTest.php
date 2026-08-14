@@ -223,7 +223,7 @@ class CartCheckoutTest extends TestCase
         $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id));
         $item = Cart::query()->firstOrFail()->items()->firstOrFail();
 
-        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('products.show', $session->product->slug))->assertOk()->assertSee('Upload photo')->assertSee('Preview')->assertDontSee('This is the one.');
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('products.show', $session->product->slug))->assertOk()->assertSee('Choose your character')->assertSee('Preview')->assertDontSee('This is the one.');
         $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('cart.change-artwork', $item))->assertRedirect(route('products.show', $session->product->slug));
         $this->assertDatabaseMissing('cart_items', ['id' => $item->id]);
         $this->assertSame(ArtworkSessionStatus::PreviewReady, $session->fresh()->status);

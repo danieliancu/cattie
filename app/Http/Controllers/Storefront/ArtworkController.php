@@ -3,23 +3,28 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Domain\Artwork\Actions\ApproveArtwork;
+use App\Domain\Artwork\Actions\CompletePendingCharacterSave;
 use App\Domain\Artwork\Actions\RenderComposedDesign;
 use App\Domain\Artwork\Actions\RequestArtworkGeneration;
+use App\Domain\Artwork\Actions\ReuseSavedCharacter;
+use App\Domain\Artwork\Actions\SaveCurrentCharacter;
 use App\Domain\Artwork\Actions\StartArtworkSession;
 use App\Domain\Artwork\Actions\StoreArtworkUpload;
-use App\Enums\ArtworkSessionStatus;
 use App\Enums\ArtworkProcessingStage;
+use App\Enums\ArtworkSessionStatus;
 use App\Enums\GenerationStatus;
 use App\Http\Controllers\Controller;
 use App\Models\ArtworkSession;
 use App\Models\ComposedDesign;
 use App\Models\GenerationAsset;
 use App\Models\Product;
+use App\Models\SavedCharacter;
 use App\Support\GuestContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class ArtworkController extends Controller
 {
@@ -37,9 +42,18 @@ class ArtworkController extends Controller
     public function start(Product $product, Request $request, StartArtworkSession $start, StoreArtworkUpload $store): RedirectResponse
     {
         abort_unless($product->is_active, 404);
-        $file = $this->validatedPhoto($request);
-        [$session,$token] = $start->handle($product, $request->all(), $request->cookie('cattie_guest_token'));
-        $store->handle($session, file_get_contents($file->getRealPath()), $file->getMimeType(), $file->getClientOriginalName());
+        $character = $this->selectedCharacter($request, $product);
+        $input = $request->all();
+        if ($character) {
+            $input['artwork_style_id'] = $character->artwork_style_id;
+        }
+        $file = $character ? null : $this->validatedPhoto($request);
+        [$session,$token] = $start->handle($product, $input, $request->cookie('cattie_guest_token'));
+        if ($character) {
+            app(ReuseSavedCharacter::class)->handle($session->load(['product.designTemplate', 'product.artworkStyles']), $character);
+        } else {
+            $store->handle($session, file_get_contents($file->getRealPath()), $file->getMimeType(), $file->getClientOriginalName());
+        }
 
         return redirect()->route('products.show', $product->slug)->withCookie(app(GuestContext::class)->cookie($token));
     }
@@ -57,13 +71,23 @@ class ArtworkController extends Controller
         if (! in_array($session->status, [ArtworkSessionStatus::AwaitingUpload, ArtworkSessionStatus::Failed], true)) {
             return redirect()->route('products.show', $session->product->slug);
         }
+        $character = $this->selectedCharacter($request, $session->product);
         if ($request->filled('variant_id')) {
-            [$variant, $style, $snapshot] = $configuration->validatedConfiguration($session->product->load(['variants', 'artworkStyles', 'personalisationFields']), $request->all());
+            $input = $request->all();
+            if ($character) {
+                $input['artwork_style_id'] = $character->artwork_style_id;
+            }
+            [$variant, $style, $snapshot] = $configuration->validatedConfiguration($session->product->load(['variants', 'artworkStyles', 'personalisationFields']), $input);
             $session->update([
                 'product_variant_id' => $variant->id,
                 'artwork_style_id' => $style->id,
                 'personalisation_snapshot' => $snapshot,
             ]);
+        }
+        if ($character) {
+            app(ReuseSavedCharacter::class)->handle($session->fresh()->load(['product.designTemplate', 'product.artworkStyles']), $character);
+
+            return redirect()->route('products.show', $session->product->slug);
         }
         if (! $request->hasFile('photo') && $session->currentGeneration) {
             $session->load(['product.designTemplate', 'currentGeneration.assets']);
@@ -87,6 +111,22 @@ class ArtworkController extends Controller
         $store->handle($session, file_get_contents($file->getRealPath()), $file->getMimeType(), $file->getClientOriginalName());
 
         return redirect()->route('products.show', $session->product->slug);
+    }
+
+    private function selectedCharacter(Request $request, Product $product): ?SavedCharacter
+    {
+        if (! $request->filled('saved_character_id')) {
+            return null;
+        }
+        if ($request->hasFile('photo')) {
+            throw ValidationException::withMessages(['photo' => 'Choose either a saved character or a new photo.']);
+        }
+        abort_unless($request->user(), 403);
+        $id = $request->validate(['saved_character_id' => ['nullable', 'string']])['saved_character_id'];
+        $character = $request->user()->savedCharacters()->findOrFail($id);
+        abort_unless($product->artworkStyles()->whereKey($character->artwork_style_id)->exists(), 422, 'That character style is not available for this product.');
+
+        return $character;
     }
 
     private function validatedPhoto(Request $request)
@@ -348,6 +388,31 @@ class ArtworkController extends Controller
         ]);
 
         return redirect()->route('products.show', $session->product->slug);
+    }
+
+    public function saveCharacter(string $publicId, Request $request, SaveCurrentCharacter $save): JsonResponse|RedirectResponse
+    {
+        $session = $this->owned($publicId, $request)->load(['product', 'currentGeneration.assets']);
+        abort_unless(in_array($session->status, [ArtworkSessionStatus::PreviewReady, ArtworkSessionStatus::Approved], true), 409);
+        $asset = $session->currentGeneration?->assets->firstWhere('kind', 'composition_source');
+        abort_unless($asset, 422, 'That character cannot be saved.');
+
+        if (! $request->user()) {
+            $request->session()->put(CompletePendingCharacterSave::SESSION_KEY, [
+                'artwork_session_id' => $session->id,
+                'generation_asset_id' => $asset->id,
+                'ownership_hash' => $session->access_token_hash,
+                'expires_at' => now()->addMinutes(30)->timestamp,
+            ]);
+            $url = route('register');
+
+            return $request->expectsJson() ? response()->json(['redirect_url' => $url], 202) : redirect()->to($url);
+        }
+
+        $character = $save->handle($request->user(), $session, $asset);
+        $payload = ['id' => $character->id, 'name' => $character->name, 'library_url' => route('account.characters.index')];
+
+        return $request->expectsJson() ? response()->json($payload) : redirect()->route('products.show', $session->product->slug);
     }
 
     private function designGeometry(ComposedDesign $design): array

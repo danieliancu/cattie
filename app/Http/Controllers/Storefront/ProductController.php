@@ -12,6 +12,7 @@ use App\Support\CanonicalUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class ProductController extends Controller
@@ -72,6 +73,24 @@ class ProductController extends Controller
         $defaultImage = $product->images->firstWhere('product_variant_id', $defaultVariant?->id)
             ?? $product->primaryImage();
         $session = $resolve->handle($product, $request);
+        $savedCharacters = collect();
+        $currentSavedCharacter = null;
+        if ($request->user()) {
+            $savedCharacters = $request->user()->savedCharacters()
+                ->with('artworkStyle')
+                ->whereIn('artwork_style_id', $product->artworkStyles->pluck('id'))
+                ->latest()
+                ->get();
+            $currentAsset = $session?->currentGeneration?->assets?->firstWhere('kind', 'composition_source');
+            $currentSavedCharacter = $session?->currentGeneration?->savedCharacter;
+            if (! $currentSavedCharacter && $currentAsset && Storage::disk($currentAsset->disk)->exists($currentAsset->storage_key)) {
+                $currentSavedCharacter = $savedCharacters->first(fn ($character) => $character->artwork_style_id === $session->artwork_style_id
+                    && hash_equals($character->sha256, hash_file('sha256', Storage::disk($currentAsset->disk)->path($currentAsset->storage_key))));
+            }
+            if ($currentSavedCharacter) {
+                $savedCharacters = $savedCharacters->reject(fn ($character) => $character->is($currentSavedCharacter))->values();
+            }
+        }
         $relatedProducts = Product::query()
             ->active()
             ->where('id', '!=', $product->id)
@@ -92,7 +111,7 @@ class ProductController extends Controller
         }
 
         return response()
-            ->view('storefront.products.show', compact('product', 'recommendedStyle', 'defaultVariant', 'defaultImage', 'session', 'relatedProducts'))
+            ->view('storefront.products.show', compact('product', 'recommendedStyle', 'defaultVariant', 'defaultImage', 'session', 'relatedProducts', 'savedCharacters', 'currentSavedCharacter'))
             ->header('Cache-Control', 'private, no-store, max-age=0');
     }
 }

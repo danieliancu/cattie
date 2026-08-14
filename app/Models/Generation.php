@@ -25,6 +25,11 @@ class Generation extends Model
         return $this->belongsTo(Upload::class);
     }
 
+    public function savedCharacter()
+    {
+        return $this->belongsTo(SavedCharacter::class);
+    }
+
     public function product()
     {
         return $this->belongsTo(Product::class);

@@ -11,3 +11,5 @@
 |  **8** | 🚚 **Fulfilment / tracking**    | Webhook-urile TreatPod actualizează producția, expedierea, courier-ul și tracking-ul.                                                                                      |
 |  **9** | 🔐 **Production hardening**     | Securitate conturi, password reset/email verification dacă vrem, rate limiting, GDPR final, retention, backup, monitoring, queue alerts, deploy production.                |
 | **10** | ✅ **Final QA**                 | Flux complet real: creare cont → produs → AI → plată → tipar → expediere → suport client.                                                                                  |
+
+De rezolvat cu VAT-ul, de aflat de la tipografie cum e

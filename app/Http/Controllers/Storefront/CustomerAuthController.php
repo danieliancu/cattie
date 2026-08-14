@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Storefront;
 
+use App\Domain\Artwork\Actions\CompletePendingCharacterSave;
 use App\Domain\Cart\Actions\MergeCustomerCart;
 use App\Domain\Orders\Actions\ClaimGuestOrder;
 use App\Http\Controllers\Controller;
@@ -23,7 +24,7 @@ final class CustomerAuthController extends Controller
         return view('storefront.auth.login', ['claimOrder' => $this->claimNumber($request)]);
     }
 
-    public function login(Request $request, MergeCustomerCart $merge, ClaimGuestOrder $claim): RedirectResponse
+    public function login(Request $request, MergeCustomerCart $merge, ClaimGuestOrder $claim, CompletePendingCharacterSave $pendingCharacter): RedirectResponse
     {
         $data = $request->validate(['email' => ['required', 'email:rfc'], 'password' => ['required', 'string'], 'remember' => ['nullable', 'boolean'], 'claim_order' => ['nullable', 'string', 'max:40']]);
         if (! Auth::attempt(['email' => strtolower($data['email']), 'password' => $data['password'], 'is_admin' => false], (bool) ($data['remember'] ?? false))) {
@@ -32,8 +33,9 @@ final class CustomerAuthController extends Controller
         $request->session()->regenerate();
         $merge->handle($request, $request->user());
         $order = ! empty($data['claim_order']) ? $claim->handle($data['claim_order'], $request, $request->user()) : null;
+        $characterReturn = $pendingCharacter->handle($request, $request->user());
 
-        return $order ? redirect()->route('account.orders.show', $order->number) : redirect()->intended(route('account.index'));
+        return $characterReturn ? redirect()->to($characterReturn) : ($order ? redirect()->route('account.orders.show', $order->number) : redirect()->intended(route('account.index')));
     }
 
     public function registerForm(Request $request, GuestContext $guest): View
@@ -48,7 +50,7 @@ final class CustomerAuthController extends Controller
         return view('storefront.auth.register', compact('claimOrder', 'email'));
     }
 
-    public function register(Request $request, MergeCustomerCart $merge, ClaimGuestOrder $claim): RedirectResponse
+    public function register(Request $request, MergeCustomerCart $merge, ClaimGuestOrder $claim, CompletePendingCharacterSave $pendingCharacter): RedirectResponse
     {
         $data = $request->validate(['email' => ['required', 'email:rfc', 'max:254', 'unique:users,email'], 'password' => ['required', 'confirmed', Password::min(8)], 'claim_order' => ['nullable', 'string', 'max:40']]);
         $user = User::query()->create(['email' => strtolower($data['email']), 'password' => Hash::make($data['password']), 'is_admin' => false]);
@@ -56,8 +58,9 @@ final class CustomerAuthController extends Controller
         $request->session()->regenerate();
         $merge->handle($request, $user);
         $order = ! empty($data['claim_order']) ? $claim->handle($data['claim_order'], $request, $user) : null;
+        $characterReturn = $pendingCharacter->handle($request, $user);
 
-        return $order ? redirect()->route('account.orders.show', $order->number) : redirect()->intended(route('account.index'));
+        return $characterReturn ? redirect()->to($characterReturn) : ($order ? redirect()->route('account.orders.show', $order->number) : redirect()->intended(route('account.index')));
     }
 
     public function logout(Request $request): RedirectResponse

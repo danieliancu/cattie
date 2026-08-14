@@ -38,7 +38,7 @@ class ResolveResumableArtworkSession
                             ->whereDoesntHave('cartItems');
                     });
             })
-            ->with(['variant', 'artworkStyle', 'currentUpload', 'generations.assets.composedDesigns', 'composedDesigns', 'approvedAsset', 'approvedComposedDesign'])
+            ->with(['variant', 'artworkStyle', 'currentUpload', 'generations.savedCharacter', 'generations.assets.composedDesigns', 'composedDesigns', 'approvedAsset', 'approvedComposedDesign'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->first();

@@ -39,7 +39,7 @@ class ProductArtworkWorkspaceTest extends TestCase
         $session = ArtworkSession::query()->firstOrFail();
         $page = $this->withCookie('cattie_guest_token', 'workspace-owner')->get(route('products.show', $product->slug));
         $page->assertOk()->assertSee('Creating your artwork')->assertSee('Creating your illustration')->assertSee('Removing the background')->assertSee('Preparing your preview')->assertSee('Your artwork is ready')->assertSee('View Your Design')->assertSee('role="dialog"', false)->assertSee($session->public_id);
-        $page->assertSee('bg-black/80', false)->assertSee('bg-cover bg-center', false)->assertSee('role="progressbar"', false);
+        $page->assertSee('artwork-progress-overlay', false)->assertSee('bg-cover bg-center', false)->assertSee('role="progressbar"', false);
         $page->assertSee(route('artwork.cancel', $session->public_id))->assertSee('Cancel artwork creation');
         $this->assertSame(ArtworkProcessingStage::PreparingPhoto, $session->fresh()->processing_stage);
         $this->assertStringContainsString('private', $page->headers->get('Cache-Control'));
@@ -80,7 +80,7 @@ class ProductArtworkWorkspaceTest extends TestCase
 
         $this->get(route('products.show', $product->slug))->assertOk()
             ->assertSee('Search products')->assertSee('Track Order')->assertSee('Sign in')->assertSee('mobile-navigation')
-            ->assertSee('Bottle colour')->assertSee('Name')->assertSee('Upload photo')->assertSee('Preview')
+            ->assertSee('Bottle colour')->assertSee('Name')->assertSee('Choose your character')->assertSee('+ Upload')->assertSee('Preview')
             ->assertSee('Made')->assertSee('For You')->assertSee('Secure')->assertSee('Privacy')->assertSee('Shipping &amp; Returns', false)
             ->assertSee('personalised items are made to order')->assertSee('Made and printed in the UK')->assertSee('3–5 working days')
             ->assertSee('£3.50')->assertSee('Royal Mail 48 Tracked')->assertSee('Royal Mail 24 Tracked')->assertSee('DPD')
@@ -88,7 +88,7 @@ class ProductArtworkWorkspaceTest extends TestCase
             ->assertSee('min-h-24', false)
             ->assertSee('bottle-colour-options grid grid-cols-4', false)
             ->assertSee("12 - nameValue.length) + ' characters left'", false)
-            ->assertSee(':disabled="submitting || !photoReady() || !nameValue.trim()"', false)
+            ->assertSee(':disabled="submitting || !variantReady() || !photoReady() || !nameValue.trim()"', false)
             ->assertSee('@submit="submitting = true"', false)
             ->assertSee('Starting preview', false)
             ->assertSee('@change="selectPhoto($event)"', false)
@@ -116,10 +116,10 @@ class ProductArtworkWorkspaceTest extends TestCase
         $this->withCookie('cattie_guest_token', 'change-owner')->post(route('artwork.change', $session->public_id))
             ->assertRedirect(route('products.show', $product->slug));
         $this->withCookie('cattie_guest_token', 'change-owner')->get(route('products.show', $product->slug))
-            ->assertOk()->assertSee('value="Maria"', false)->assertSee('Your AI illustration')
+            ->assertOk()->assertSee('value="Maria"', false)->assertSee('Current character')
             ->assertSee(route('artwork.assets', [$session->public_id, $preview]), false)
-            ->assertSee('Remove selected photo')->assertSee('hasExistingPhoto:true', false)
-            ->assertSee('x-show="removeExistingPhoto"', false)->assertSee('h-[135px] w-auto max-w-full rounded-2xl object-contain shadow', false)->assertDontSee('Your artwork is ready');
+            ->assertSee('Save character')->assertSee('hasExistingPhoto:true', false)
+            ->assertSee('Choose your character')->assertDontSee('Your artwork is ready');
         $this->withCookie('cattie_guest_token', 'change-owner')->post(route('artwork.upload', $session->public_id), [
             'variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation' => ['name' => 'Maria'],
         ])->assertRedirect(route('products.show', $product->slug));
@@ -165,7 +165,7 @@ class ProductArtworkWorkspaceTest extends TestCase
         [$product, $variant, $style] = $this->catalogue();
         [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id], 'owner-token');
 
-        $this->withCookie('cattie_guest_token', 'intruder-token')->get(route('products.show', $product->slug))->assertOk()->assertSee('Preview')->assertSee('Upload photo')->assertDontSee('Creating your artwork');
+        $this->withCookie('cattie_guest_token', 'intruder-token')->get(route('products.show', $product->slug))->assertOk()->assertSee('Preview')->assertSee('Choose your character')->assertDontSee('Creating your artwork');
         $this->withCookie('cattie_guest_token', 'intruder-token')->get(route('artwork.show', $session->public_id))->assertNotFound();
         $this->withCookie('cattie_guest_token', 'owner-token')->get(route('artwork.show', $session->public_id))->assertRedirect(route('products.show', $product->slug));
     }

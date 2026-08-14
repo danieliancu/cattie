@@ -9,6 +9,7 @@ use App\Http\Controllers\Storefront\HomeController;
 use App\Http\Controllers\Storefront\InformationPageController;
 use App\Http\Controllers\Storefront\ProductCategoryController;
 use App\Http\Controllers\Storefront\ProductController;
+use App\Http\Controllers\Storefront\SavedCharacterController;
 use App\Http\Controllers\Storefront\ProductPreviewController;
 use App\Http\Controllers\Storefront\SitemapController;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +27,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/account/orders', [AccountController::class, 'orders'])->name('account.orders.index');
     Route::get('/account/orders/{orderNumber}', [AccountController::class, 'show'])->name('account.orders.show');
     Route::get('/account/orders/{orderNumber}/items/{item}/artwork', [AccountController::class, 'artwork'])->name('account.orders.artwork');
+    Route::get('/account/characters', [SavedCharacterController::class, 'index'])->name('account.characters.index');
+    Route::get('/account/characters/{character}/preview', [SavedCharacterController::class, 'preview'])->name('account.characters.preview');
+    Route::delete('/account/characters/{character}', [SavedCharacterController::class, 'destroy'])->name('account.characters.destroy');
 });
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');
 Route::get('/products/{slug}', [ProductController::class, 'show'])->name('products.show');
@@ -55,6 +59,7 @@ Route::post('/artwork/{publicId}/name', [ArtworkController::class, 'name'])->mid
 Route::post('/artwork/{publicId}/regenerate', [ArtworkController::class, 'regenerate'])->middleware('throttle:5,1')->name('artwork.regenerate');
 Route::post('/artwork/{publicId}/approve', [ArtworkController::class, 'approve'])->name('artwork.approve');
 Route::post('/artwork/{publicId}/change', [ArtworkController::class, 'change'])->name('artwork.change');
+Route::post('/artwork/{publicId}/save-character', [ArtworkController::class, 'saveCharacter'])->middleware('throttle:20,1')->name('artwork.save-character');
 Route::post('/artwork/{publicId}/cart', [CartController::class, 'add'])->name('artwork.cart');
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
 Route::patch('/cart/items/{item}/quantity', [CartController::class, 'quantity'])->name('cart.quantity');
