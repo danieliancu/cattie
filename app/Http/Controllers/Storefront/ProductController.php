@@ -49,7 +49,7 @@ class ProductController extends Controller
             ->with([
                 'images',
                 'designTemplate',
-                'variants' => fn ($query) => $query->active()->ordered(),
+                'variants' => fn ($query) => $query->active()->ordered()->with('fulfilmentMappings'),
                 'artworkStyles',
                 'recommendedArtworkStyle',
                 'personalisationFields',
@@ -65,9 +65,10 @@ class ProductController extends Controller
         $recommendedStyle = $product->artworkStyles->firstWhere('id', $product->recommended_artwork_style_id);
 
         $defaultOptions = $product->preview_configuration['default_variant_options'] ?? [];
-        $defaultVariant = $product->variants->first(fn ($variant) => collect($defaultOptions)->every(
+        $availableVariants = $product->variants->filter(fn ($variant) => ! $product->designTemplate || $variant->hasSingleActiveFulfilmentMapping());
+        $defaultVariant = $availableVariants->first(fn ($variant) => collect($defaultOptions)->every(
             fn ($value, $key) => ($variant->options[$key] ?? null) === $value
-        )) ?? $product->variants->first();
+        )) ?? $availableVariants->first();
         $defaultImage = $product->images->firstWhere('product_variant_id', $defaultVariant?->id)
             ?? $product->primaryImage();
         $session = $resolve->handle($product, $request);

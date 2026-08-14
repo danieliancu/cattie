@@ -11,10 +11,11 @@ use Illuminate\Validation\ValidationException;
 
 class AddApprovedArtworkToCart
 {
-    public function __construct(private RefreshCartPrices $prices, private RecordAnalyticsEvent $analytics) {}
+    public function __construct(private RefreshCartPrices $prices, private RecordAnalyticsEvent $analytics, private AbandonCartCheckout $abandonCheckout) {}
 
     public function handle(Cart $cart, ArtworkSession $session)
     {
+        $this->abandonCheckout->handle($cart);
         $session->load(['product.designTemplate', 'variant', 'artworkStyle', 'approvedAsset.generation', 'approvedComposedDesign']);
         if ($session->status !== ArtworkSessionStatus::Approved || ! $session->approvedAsset || $session->approvedAsset->generation->status !== GenerationStatus::Succeeded) {
             throw ValidationException::withMessages(['artwork' => 'Approve your artwork before adding it to your basket.']);

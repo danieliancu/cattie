@@ -9,6 +9,8 @@ use App\Enums\GenerationStatus;
 use App\Enums\OrderStatus;
 use App\Models\Cart;
 use App\Models\Order;
+use App\Models\ShippingMethod;
+use App\Domain\Payments\Actions\ResolveEligibleShippingMethods;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -19,11 +21,12 @@ class CreateOrderFromCart
         private RefreshCartPrices $prices,
         private TransitionOrder $transition,
         private RecordAnalyticsEvent $analytics,
+        private ResolveEligibleShippingMethods $shippingMethods,
     ) {}
 
-    public function handle(Cart $cart, string $pricingHash, array $customer, string $idempotencyKey): Order
+    public function handle(Cart $cart, string $pricingHash, array $customer, string $idempotencyKey, string $shippingMethodId): Order
     {
-        return DB::transaction(function () use ($cart, $pricingHash, $customer, $idempotencyKey) {
+        return DB::transaction(function () use ($cart, $pricingHash, $customer, $idempotencyKey, $shippingMethodId) {
             $cart = Cart::query()->lockForUpdate()->findOrFail($cart->id);
 
             if ($cart->converted_order_id) {
@@ -52,6 +55,11 @@ class CreateOrderFromCart
                 }
             }
 
+            $shippingMethod = $this->shippingMethods->handle($cart, $customer['shipping_address']['country'] ?? 'GB')->firstWhere('id', $shippingMethodId);
+            if (! $shippingMethod instanceof ShippingMethod) {
+                throw ValidationException::withMessages(['shipping_method_id' => 'Please choose a delivery method available for every item in your basket.']);
+            }
+
             $subtotal = $cart->items->sum(fn ($item) => $item->lineTotalMinor());
             $order = Order::query()->create([
                 'number' => $this->orderNumber(), 'access_token_hash' => $cart->access_token_hash,
@@ -61,7 +69,8 @@ class CreateOrderFromCart
                 'shipping_minor' => null, 'tax_minor' => null, 'total_minor' => null,
                 'shipping_status' => 'unresolved', 'tax_status' => 'unresolved',
                 'totals_status' => 'unresolved', 'is_payable' => false,
-                'shipping_address' => $customer['shipping_address'], 'placed_at' => now(),
+                'shipping_address' => $customer['shipping_address'], 'shipping_method_id' => $shippingMethod->id,
+                'shipping_method_snapshot' => $shippingMethod->snapshot(), 'placed_at' => now(),
             ]);
 
             foreach ($cart->items as $item) {
@@ -78,7 +87,8 @@ class CreateOrderFromCart
             }
 
             $order = $this->transition->handle($order, OrderStatus::AwaitingPayment, reason: 'Checkout details accepted');
-            $cart->update(['status' => 'converted', 'converted_order_id' => $order->id]);
+            // Keep the basket visible while checkout/payment is still in progress.
+            $cart->update(['status' => 'active', 'converted_order_id' => $order->id]);
             $this->analytics->handle('order_created', $order);
             $this->analytics->handle('awaiting_payment', $order);
 

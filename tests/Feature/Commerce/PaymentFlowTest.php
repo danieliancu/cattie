@@ -16,6 +16,7 @@ use App\Models\Cart;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\ShippingMethod;
 use App\Providers\Payments\FakePaymentProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -38,6 +39,8 @@ class PaymentFlowTest extends TestCase
         Storage::fake('local');
         $product = Product::factory()->create();
         $variant = ProductVariant::factory()->for($product)->create(['price_minor' => 2499]);
+        $variant->fulfilmentMappings()->create(['provider' => 'treatpod', 'provider_sku' => 'TEST-SKU', 'configuration' => [], 'is_active' => true]);
+        $shipping = ShippingMethod::query()->firstOrCreate(['provider' => 'treatpod', 'code' => 'test-standard'], ['name' => 'Royal Mail 48 Tracked', 'provider_service_code' => 'RM48', 'price_minor' => 350, 'currency' => 'GBP', 'country' => 'GB', 'estimated_business_days_min' => 5, 'estimated_business_days_max' => 8, 'is_active' => true]);
         $style = ArtworkStyle::query()->create(['name' => 'Storybook Cartoon', 'slug' => 'storybook-cartoon', 'prompt_key' => 'storybook', 'is_active' => true]);
         $product->artworkStyles()->attach($style);
         [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation' => []], $token);
@@ -47,7 +50,7 @@ class PaymentFlowTest extends TestCase
         $asset = $generation->assets()->create(['kind' => 'web_preview', 'disk' => 'local', 'storage_key' => 'preview.webp', 'mime_type' => 'image/webp']);
         app(ApproveArtwork::class)->handle($session, $asset);
 
-        $order = Order::query()->create(['number' => 'CAT-2608-ABC123', 'access_token_hash' => hash('sha256', $token), 'checkout_idempotency_key' => (string) Str::uuid(), 'email' => 'mia@example.com', 'status' => OrderStatus::AwaitingPayment, 'currency' => 'GBP', 'subtotal_minor' => 2499, 'discount_minor' => 0, 'shipping_minor' => null, 'tax_minor' => null, 'total_minor' => null, 'shipping_status' => 'unresolved', 'tax_status' => 'unresolved', 'totals_status' => 'unresolved', 'is_payable' => false, 'shipping_address' => ['first_name' => 'Mia', 'last_name' => 'Smith', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A 1AA', 'country' => 'GB'], 'placed_at' => now()]);
+        $order = Order::query()->create(['number' => 'CAT-2608-ABC123', 'access_token_hash' => hash('sha256', $token), 'checkout_idempotency_key' => (string) Str::uuid(), 'email' => 'mia@example.com', 'status' => OrderStatus::AwaitingPayment, 'currency' => 'GBP', 'subtotal_minor' => 2499, 'discount_minor' => 0, 'shipping_minor' => null, 'tax_minor' => null, 'total_minor' => null, 'shipping_status' => 'unresolved', 'tax_status' => 'unresolved', 'totals_status' => 'unresolved', 'is_payable' => false, 'shipping_address' => ['first_name' => 'Mia', 'last_name' => 'Smith', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A 1AA', 'country' => 'GB'], 'shipping_method_id' => $shipping->id, 'shipping_method_snapshot' => $shipping->snapshot(), 'placed_at' => now()]);
         $order->items()->create(['product_id' => $product->id, 'product_variant_id' => $variant->id, 'artwork_session_id' => $session->id, 'generation_id' => $generation->id, 'generation_asset_id' => $asset->id, 'product_name' => $product->name, 'variant_name' => $variant->name, 'artwork_style_name' => $style->name, 'sku' => $variant->sku, 'personalisation' => [], 'artwork_snapshot' => ['asset_id' => $asset->id], 'quantity' => 1, 'unit_price_minor' => 2499, 'total_price_minor' => 2499, 'currency' => 'GBP']);
 
         return $order;
@@ -58,9 +61,9 @@ class PaymentFlowTest extends TestCase
         $order = $this->awaitingOrder();
         $this->assertFalse(app(OrderPayability::class)->check($order));
         $order = app(ResolveOrderTotals::class)->handle($order);
-        $this->assertSame(0, $order->shipping_minor);
+        $this->assertSame(350, $order->shipping_minor);
         $this->assertSame(0, $order->tax_minor);
-        $this->assertSame(2499, $order->total_minor);
+        $this->assertSame(2849, $order->total_minor);
         $this->assertTrue($order->is_payable);
         $this->assertTrue(app(OrderPayability::class)->check($order));
     }
@@ -74,7 +77,7 @@ class PaymentFlowTest extends TestCase
             app(StartPayment::class)->handle($order, (string) Str::uuid(), 'success');
             $this->fail('Disabled fake payment should not start.');
         } catch (ValidationException $exception) {
-            $this->assertSame('Test payment is not available.', $exception->errors()['payment'][0]);
+            $this->assertSame("We couldn't start your payment. Please try again.", $exception->errors()['payment'][0]);
         }
         $this->assertDatabaseCount('payments', 0);
     }
@@ -100,7 +103,7 @@ class PaymentFlowTest extends TestCase
         $first = app(StartPayment::class)->handle($order, $key, 'success');
         $second = app(StartPayment::class)->handle($order->fresh(), $key, 'success');
         $this->assertSame($first->id, $second->id);
-        $this->assertSame(2499, $first->amount_minor);
+        $this->assertSame(2849, $first->amount_minor);
         $this->assertSame('GBP', $first->currency);
         $this->assertStringStartsWith('fake_pay_', $first->external_id);
         $this->assertDatabaseCount('payments', 1);
@@ -130,7 +133,7 @@ class PaymentFlowTest extends TestCase
 
         $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id))->assertRedirect(route('cart.index'));
         $cart = Cart::query()->firstOrFail();
-        $checkout = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => (string) Str::uuid(),
+        $checkout = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => (string) Str::uuid(), 'shipping_method_id' => ShippingMethod::query()->value('id'),
             'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'mia@example.com',
             'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A 1AA', 'country' => 'GB'];
         $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $checkout)->assertRedirect();
@@ -143,6 +146,8 @@ class PaymentFlowTest extends TestCase
         ])->assertRedirect(route('orders.confirmation', $order->number));
 
         $this->assertSame(OrderStatus::Paid, $order->fresh()->status);
+        $this->assertSame('converted', $cart->fresh()->status);
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('cart.index'))->assertOk()->assertSee('Your basket is empty.');
         $this->assertDatabaseHas('order_items', ['order_id' => $order->id, 'artwork_session_id' => $session->id]);
     }
 }

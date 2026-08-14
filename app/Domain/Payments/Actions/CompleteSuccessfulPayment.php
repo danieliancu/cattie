@@ -7,6 +7,7 @@ use App\Domain\Orders\Actions\TransitionOrder;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Payment;
+use App\Models\Cart;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -21,6 +22,7 @@ class CompleteSuccessfulPayment
             $order = $payment->order()->lockForUpdate()->firstOrFail();
 
             if ($payment->status === PaymentStatus::Succeeded && $order->status === OrderStatus::Paid) {
+                Cart::query()->where('converted_order_id', $order->id)->update(['status' => 'converted']);
                 return $payment;
             }
             if ($payment->amount_minor !== $order->total_minor || $payment->currency !== $order->currency || ! $this->payability->check($order)) {
@@ -30,6 +32,7 @@ class CompleteSuccessfulPayment
             $payment->update(['status' => PaymentStatus::Succeeded, 'failure_reason' => null, 'failure_code' => null, 'completed_at' => now()]);
             $this->transition->handle($order, OrderStatus::Paid, reason: 'Verified payment succeeded', metadata: ['payment_id' => $payment->id]);
             $order->update(['is_payable' => false]);
+            Cart::query()->where('converted_order_id', $order->id)->update(['status' => 'converted']);
             $this->analytics->handle('payment_succeeded', $payment);
             $this->analytics->handle('order_paid', $order);
 

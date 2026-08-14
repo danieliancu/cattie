@@ -56,10 +56,21 @@ class ProductVariant extends Model
         return Money::format($this->price_override_minor ?? $this->price_minor, $this->currency);
     }
 
+    public function hasSingleActiveFulfilmentMapping(): bool
+    {
+        if ($this->relationLoaded('fulfilmentMappings')) {
+            return $this->fulfilmentMappings->where('is_active', true)->count() === 1;
+        }
+
+        return $this->fulfilmentMappings()->where('is_active', true)->count() === 1;
+    }
+
     /** @return array{width: int, height: int, dpi: int} */
     public function requiredPrintResolution(string $printArea = 'default'): array
     {
-        $mappings = $this->fulfilmentMappings()->where('is_active', true)->get();
+        $mappings = $this->relationLoaded('fulfilmentMappings')
+            ? $this->fulfilmentMappings->where('is_active', true)
+            : $this->fulfilmentMappings()->where('is_active', true)->get();
 
         if ($mappings->count() !== 1) {
             throw new DomainException("Product variant [{$this->id}] must have exactly one active fulfilment mapping; [{$mappings->count()}] found.");

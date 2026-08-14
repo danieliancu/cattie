@@ -8,7 +8,7 @@ use App\Contracts\PaymentProvider;
 use App\Domain\Cart\Actions\ResolveGuestCart;
 use App\Domain\Payments\Contracts\ShippingResolver;
 use App\Domain\Payments\Contracts\TaxResolver;
-use App\Domain\Payments\Resolvers\FreeUkShippingResolver;
+use App\Domain\Payments\Resolvers\OrderShippingMethodResolver;
 use App\Domain\Payments\Resolvers\ZeroUkTaxResolver;
 use App\Models\FulfilmentProductMapping;
 use App\Models\Product;
@@ -17,6 +17,9 @@ use App\Observers\ProductObserver;
 use App\Providers\ImageGeneration\FakeImageGenerationProvider;
 use App\Providers\ImageGeneration\OpenAiImageGenerationProvider;
 use App\Providers\Payments\FakePaymentProvider;
+use App\Providers\Payments\StripePaymentProvider;
+use App\Integrations\Stripe\SdkStripeGateway;
+use App\Integrations\Stripe\StripeGateway;
 use App\Services\LocalBackgroundRemovalRunner;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -29,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(StripeGateway::class, SdkStripeGateway::class);
         $this->app->bind(BackgroundRemovalRunner::class, LocalBackgroundRemovalRunner::class);
         $this->app->bind(ImageGenerationProvider::class, fn () => match (config('artwork.provider')) {
             'openai' => new OpenAiImageGenerationProvider,
@@ -36,11 +40,11 @@ class AppServiceProvider extends ServiceProvider
             default => throw new RuntimeException('Unsupported image generation provider.'),
         });
         $this->app->bind(PaymentProvider::class, fn () => match (config('payments.provider')) {
-            'fake' => new FakePaymentProvider, default => throw new RuntimeException('Unsupported payment provider.')
+            'fake' => new FakePaymentProvider,
+            'stripe' => $this->app->make(StripePaymentProvider::class),
+            default => throw new RuntimeException('Unsupported payment provider.')
         });
-        $this->app->bind(ShippingResolver::class, fn () => match (config('payments.shipping.strategy')) {
-            'free_uk' => new FreeUkShippingResolver, default => throw new RuntimeException('Unsupported shipping strategy.')
-        });
+        $this->app->bind(ShippingResolver::class, OrderShippingMethodResolver::class);
         $this->app->bind(TaxResolver::class, fn () => match (config('payments.tax.strategy')) {
             'zero_uk' => new ZeroUkTaxResolver, default => throw new RuntimeException('Unsupported tax strategy.')
         });

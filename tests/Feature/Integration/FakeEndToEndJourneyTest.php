@@ -12,6 +12,8 @@ use App\Models\Cart;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use Database\Seeders\CatalogueSeeder;
+use Database\Seeders\ShippingMethodSeeder;
+use App\Models\ShippingMethod;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -28,6 +30,8 @@ class FakeEndToEndJourneyTest extends TestCase
         config(['queue.default' => 'sync', 'artwork.provider' => 'fake', 'artwork.fake_failure' => false, 'payments.provider' => 'fake', 'payments.fake.enabled' => true]);
         $product = Product::factory()->create();
         $variant = ProductVariant::factory()->for($product)->create(['price_minor' => 2499]);
+        $variant->fulfilmentMappings()->create(['provider' => 'treatpod', 'provider_sku' => 'TEST-SKU', 'configuration' => [], 'is_active' => true]);
+        $this->seed(ShippingMethodSeeder::class);
         $style = ArtworkStyle::query()->create(['name' => 'Storybook Cartoon', 'slug' => 'storybook-cartoon', 'prompt_key' => 'storybook', 'is_active' => true]);
         $product->artworkStyles()->attach($style);
         [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation' => []], 'journey-owner');
@@ -44,7 +48,7 @@ class FakeEndToEndJourneyTest extends TestCase
         $this->withCookie('cattie_guest_token', 'journey-owner')->post(route('artwork.cart', $session->public_id), ['unit_price_minor' => 1])->assertRedirect(route('cart.index'));
         $cart = Cart::query()->firstOrFail();
         $this->withCookie('cattie_guest_token', 'journey-owner')->get(route('checkout.show'))->assertOk();
-        $checkout = ['pricing_hash' => $cart->fresh()->pricing_hash, 'checkout_idempotency_key' => (string) Str::uuid(), 'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'mia@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A 1AA', 'country' => 'GB'];
+        $checkout = ['pricing_hash' => $cart->fresh()->pricing_hash, 'checkout_idempotency_key' => (string) Str::uuid(), 'shipping_method_id' => ShippingMethod::query()->value('id'), 'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'mia@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A 1AA', 'country' => 'GB'];
         $this->withCookie('cattie_guest_token', 'journey-owner')->post(route('checkout.store'), $checkout)->assertRedirect();
         $order = $cart->fresh()->convertedOrder;
         $this->assertSame(OrderStatus::AwaitingPayment, $order->status);
@@ -66,6 +70,7 @@ class FakeEndToEndJourneyTest extends TestCase
         Storage::fake('local');
         Storage::fake('public');
         $this->seed(CatalogueSeeder::class);
+        $this->seed(ShippingMethodSeeder::class);
         config(['queue.default' => 'sync', 'artwork.provider' => 'fake', 'artwork.fake_failure' => false, 'payments.provider' => 'fake', 'payments.fake.enabled' => true]);
         $product = Product::query()->where('slug', 'water-bottle-with-red-flip-lid')->with(['variants', 'artworkStyles'])->firstOrFail();
         $variant = $product->variants->first(fn ($candidate) => $candidate->options['colour'] === 'white');
@@ -86,7 +91,7 @@ class FakeEndToEndJourneyTest extends TestCase
         Storage::disk('local')->assertExists($design->storage_key);
         $this->withCookie('cattie_guest_token', 'bottle-owner')->post(route('artwork.cart', $session->public_id))->assertRedirect(route('cart.index'));
         $cart = Cart::query()->firstOrFail();
-        $checkout = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => (string) Str::uuid(), 'first_name' => 'Maria', 'last_name' => 'Smith', 'email' => 'maria@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A 1AA', 'country' => 'GB'];
+        $checkout = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => (string) Str::uuid(), 'shipping_method_id' => ShippingMethod::query()->value('id'), 'first_name' => 'Maria', 'last_name' => 'Smith', 'email' => 'maria@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A 1AA', 'country' => 'GB'];
         $this->withCookie('cattie_guest_token', 'bottle-owner')->post(route('checkout.store'), $checkout)->assertRedirect();
         $order = $cart->fresh()->convertedOrder;
         $this->assertSame($design->id, $order->items()->first()->composed_design_id);

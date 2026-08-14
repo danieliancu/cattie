@@ -16,9 +16,14 @@
             </div>
         @elseif(in_array($session->status->value, ['preparing_photo', 'generating']))
             <div class="absolute inset-0 bg-cover bg-center lg:hidden" style="background-image:url('{{ route('artwork.original', $session->public_id) }}')" aria-hidden="true"></div>
-            <div class="absolute inset-0 bg-black/80 lg:bg-black" aria-hidden="true"></div>
+            <div class="artwork-progress-overlay absolute inset-0" aria-hidden="true"></div>
             <div x-show="!ready && !failed" class="pointer-events-none absolute inset-0 z-10 overflow-hidden lg:hidden" aria-hidden="true">
                 <template x-for="star in stars" :key="star.id">
+                    <span class="artwork-ai-star absolute" :style="star.style"></span>
+                </template>
+            </div>
+            <div x-show="!ready && !failed" class="pointer-events-none absolute inset-0 z-10 hidden overflow-hidden lg:block" aria-hidden="true">
+                <template x-for="star in desktopStars" :key="star.id">
                     <span class="artwork-ai-star absolute" :style="star.style"></span>
                 </template>
             </div>
@@ -28,7 +33,7 @@
                 </template>
             </div>
             <div class="relative z-20 flex min-h-dvh items-center justify-center overflow-y-auto p-5 sm:p-10" role="dialog" aria-modal="true" aria-labelledby="artwork-progress-title" aria-live="polite">
-                <div class="relative w-full max-w-xl text-white">
+                <div class="relative w-full max-w-xl text-white lg:rounded-[2rem] lg:bg-black lg:p-12 lg:shadow-2xl">
                     <form x-show="!failed && !ready" method="POST" action="{{ route('artwork.cancel', $session->public_id) }}" class="absolute -top-14 right-0">@csrf<button type="submit" class="flex h-10 w-10 cursor-pointer items-center justify-center text-white transition hover:scale-110" aria-label="Cancel artwork creation" title="Cancel artwork creation"><i data-lucide="x" class="h-9 w-9" stroke-width="2.5" aria-hidden="true"></i></button></form>
                     <h1 id="artwork-progress-title" class="font-display text-4xl sm:text-5xl" x-text="failed ? 'We couldn’t create your artwork this time.' : (ready ? 'Your design is ready' : 'Creating your artwork…')">Creating your artwork…</h1>
                     <ol class="mt-10 space-y-4 text-left sm:mt-12">
@@ -204,9 +209,10 @@
                             <div class="bottle-colour-options mt-4 grid grid-cols-4 gap-2">
                                 @foreach($bottleVariants as $variant)
                                     @php($colourLabel = strtolower($variant->options['colour'] ?? '') === 'grey' ? 'Gray' : str($variant->options['colour'] ?? '')->title())
-                                    <label class="selection-card min-w-0" :class="changingColour ? 'pointer-events-none opacity-60' : ''">
-                                        <input class="sr-only" type="radio" name="preview_variant_id" value="{{ $variant->id }}" :checked="selectedVariantId === @js($variant->id)" @change="chooseVariant(@js($variant->id))" :disabled="changingColour">
-                                        <span><strong class="block">{{ $colourLabel }}</strong><span class="block">{{ $variant->formattedPrice() }}</span></span>
+                                    @php($variantAvailable = $variant->hasSingleActiveFulfilmentMapping())
+                                    <label class="selection-card min-w-0 {{ $variantAvailable ? '' : 'cursor-not-allowed opacity-45' }}" :class="changingColour ? 'pointer-events-none opacity-60' : ''" @if(!$variantAvailable) title="This option is not currently available" @endif>
+                                        <input class="sr-only" type="radio" name="preview_variant_id" value="{{ $variant->id }}" :checked="selectedVariantId === @js($variant->id)" @change="chooseVariant(@js($variant->id))" @disabled(!$variantAvailable) :disabled="changingColour">
+                                        <span><strong class="block">{{ $colourLabel }}</strong><span class="block">{{ $variantAvailable ? $variant->formattedPrice() : 'Unavailable' }}</span></span>
                                     </label>
                                 @endforeach
                             </div>
@@ -278,6 +284,14 @@ document.addEventListener('alpine:init', () => {
             const coordinates = side === 0 ? `left:${along}%;top:${edge}px` : side === 1 ? `right:${edge}px;top:${along}%` : side === 2 ? `left:${along}%;bottom:${edge}px` : `left:${edge}px;top:${along}%`;
             const colour = ['#67e8f9', '#c084fc', '#f9a8d4', '#fde047', '#6ee7b7'][index % 5];
             return {id: index, style: `${coordinates};--star-colour:${colour};--star-size:${7 + (index % 4) * 2}px;--star-delay:${(index * .31) % 3.2}s;--star-duration:${1.7 + (index % 5) * .35}s`};
+        }),
+        desktopStars: Array.from({length: 42}, (_, index) => {
+            const region = index % 4;
+            const sequence = Math.floor(index / 4);
+            const x = region === 0 ? 3 + ((sequence * 7) % 16) : region === 1 ? 81 + ((sequence * 11) % 16) : 22 + ((sequence * 13) % 57);
+            const y = region === 2 ? 4 + ((sequence * 5) % 12) : region === 3 ? 84 + ((sequence * 7) % 12) : 4 + ((sequence * 17) % 92);
+            const colour = ['#67e8f9', '#c084fc', '#f9a8d4', '#fde047', '#6ee7b7'][index % 5];
+            return {id: `desktop-${index}`, style: `left:${x}%;top:${y}%;--star-colour:${colour};--star-size:${16 + (index % 5) * 4}px;--star-delay:${(index * .23) % 3.4}s;--star-duration:${1.9 + (index % 6) * .32}s`};
         }),
         confetti: Array.from({length: 72}, (_, index) => ({
             id: index,

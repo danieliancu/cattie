@@ -30,7 +30,11 @@ class StartArtworkSession
         $style = $product->artworkStyles()->find($input['artwork_style_id'] ?? null);
         if (! $variant || ! $style) {
             throw ValidationException::withMessages(['selection' => 'Please choose an available option and artwork style.']);
-        } $fields = $product->personalisationFields;
+        }
+        if ($product->designTemplate && ! $variant->hasSingleActiveFulfilmentMapping()) {
+            throw ValidationException::withMessages(['variant_id' => 'This option is not currently available. Please choose another one.']);
+        }
+        $fields = $product->personalisationFields;
         $known = $fields->pluck('key')->all();
         $submitted = array_keys($input['personalisation'] ?? []);
         if (array_diff($submitted, $known)) {

@@ -11,9 +11,9 @@ class ProductPreviewController extends Controller
     public function __invoke(Product $product, Request $request)
     {
         abort_unless($request->hasValidSignature() && $request->user()?->is_admin, 403);
-        $product->load(['images', 'defaultVariant', 'variants' => fn ($q) => $q->active()->ordered(), 'artworkStyles', 'recommendedArtworkStyle', 'personalisationFields', 'categories']);
+        $product->load(['images', 'defaultVariant', 'variants' => fn ($q) => $q->active()->ordered()->with('fulfilmentMappings'), 'artworkStyles', 'recommendedArtworkStyle', 'personalisationFields', 'categories']);
         $recommendedStyle = $product->artworkStyles->firstWhere('id', $product->recommended_artwork_style_id);
-        $defaultVariant = $product->defaultVariant ?? $product->variants->first();
+        $defaultVariant = $product->variants->first(fn ($variant) => $variant->hasSingleActiveFulfilmentMapping());
         $defaultImage = $product->primaryImage();
         $session = null;
         $relatedProducts = collect();

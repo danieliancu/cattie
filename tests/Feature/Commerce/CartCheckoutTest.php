@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Commerce;
 
+use App\Enums\OrderStatus;
 use App\Domain\Artwork\Actions\ApproveArtwork;
 use App\Domain\Artwork\Actions\StartArtworkSession;
 use App\Enums\ArtworkSessionStatus;
@@ -10,6 +11,8 @@ use App\Models\ArtworkStyle;
 use App\Models\Cart;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\ShippingMethod;
+use Database\Seeders\ShippingMethodSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -45,6 +48,8 @@ class CartCheckoutTest extends TestCase
         Storage::fake('local');
         $product = Product::factory()->create();
         $variant = ProductVariant::factory()->for($product)->create(['price_minor' => 2499]);
+        $variant->fulfilmentMappings()->create(['provider' => 'treatpod', 'provider_sku' => 'TEST-SKU', 'configuration' => [], 'is_active' => true]);
+        $this->seed(ShippingMethodSeeder::class);
         $style = ArtworkStyle::query()->create(['name' => 'Storybook Cartoon', 'slug' => 'storybook-cartoon', 'prompt_key' => 'storybook', 'is_active' => true]);
         $product->artworkStyles()->attach($style);
         [$session] = app(StartArtworkSession::class)->handle($product, ['variant_id' => $variant->id, 'artwork_style_id' => $style->id, 'personalisation' => []], $token);
@@ -66,6 +71,8 @@ class CartCheckoutTest extends TestCase
         $this->withCookie('cattie_guest_token', 'owner-secret')->post($url)->assertRedirect(route('cart.index'));
         $this->assertDatabaseCount('cart_items', 1);
         $this->assertDatabaseHas('cart_items', ['artwork_session_id' => $session->id, 'unit_price_minor' => $variant->price_minor, 'quantity' => 1]);
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('cart.index'))
+            ->assertOk()->assertSee('Cartoon')->assertDontSee('Storybook Cartoon');
     }
 
     public function test_quantity_limits_and_price_refresh_are_server_authoritative(): void
@@ -79,12 +86,78 @@ class CartCheckoutTest extends TestCase
         $this->assertSame(2799, $item->fresh()->unit_price_minor);
     }
 
-    public function test_checkout_creates_one_immutable_unpayable_awaiting_payment_order(): void
+    public function test_checkout_uses_admin_shipping_selection_and_freezes_its_order_snapshot(): void
+    {
+        [$session] = $this->approved();
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id));
+        $cart = Cart::query()->firstOrFail();
+        $standard = ShippingMethod::query()->where('code', 'royal_mail_48_tracked')->firstOrFail();
+        $express = ShippingMethod::query()->where('code', 'royal_mail_24_tracked')->firstOrFail();
+
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('checkout.show'))
+            ->assertOk()->assertSee('Royal Mail 48 Tracked')->assertSee('5–8 business days')
+            ->assertSee('Royal Mail 24 Tracked')->assertSee('DPD')
+            ->assertSee("shippingMethodId:'{$standard->id}'", false);
+
+        $payload = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => fake()->uuid(), 'shipping_method_id' => $express->id, 'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'mia@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A1AA', 'country' => 'GB'];
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $payload)->assertRedirect();
+        $order = $cart->fresh()->convertedOrder;
+        $this->assertSame($express->id, $order->shipping_method_id);
+        $this->assertSame('ROYAL_MAIL_24_TRACKED', $order->shipping_method_snapshot['provider_service_code']);
+
+        $express->update(['price_minor' => 999, 'name' => 'Changed later']);
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('checkout.show'))
+            ->assertOk()->assertSee('Royal Mail 24 Tracked')->assertSee('£4.13')->assertDontSee('Changed later');
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('checkout.payment', $order->number))
+            ->assertOk()->assertSee('Royal Mail 24 Tracked')->assertSee('£4.13')
+            ->assertSee('Cartoon')->assertDontSee('Storybook Cartoon');
+        $this->assertSame(413, $order->fresh()->shipping_minor);
+        $this->assertSame('Royal Mail 24 Tracked', $order->shipping_method_snapshot['name']);
+    }
+
+    public function test_checkout_rejects_a_shipping_method_for_another_provider(): void
+    {
+        [$session] = $this->approved();
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id));
+        $cart = Cart::query()->firstOrFail();
+        $foreign = ShippingMethod::query()->create(['provider' => 'prodigi', 'code' => 'foreign', 'name' => 'Other provider', 'provider_service_code' => 'OTHER', 'price_minor' => 100, 'currency' => 'GBP', 'country' => 'GB', 'estimated_business_days_min' => 1, 'estimated_business_days_max' => 2, 'is_active' => true]);
+        $payload = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => fake()->uuid(), 'shipping_method_id' => $foreign->id, 'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'mia@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A1AA', 'country' => 'GB'];
+
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $payload)->assertSessionHasErrors('shipping_method_id');
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_changing_shipping_method_replaces_the_pending_order(): void
+    {
+        [$session] = $this->approved();
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id));
+        $cart = Cart::query()->firstOrFail();
+        $standard = ShippingMethod::query()->where('code', 'royal_mail_48_tracked')->firstOrFail();
+        $express = ShippingMethod::query()->where('code', 'royal_mail_24_tracked')->firstOrFail();
+        $customer = ['pricing_hash' => $cart->pricing_hash, 'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'mia@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A1AA', 'country' => 'GB'];
+
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), [
+            ...$customer, 'checkout_idempotency_key' => fake()->uuid(), 'shipping_method_id' => $standard->id,
+        ])->assertRedirect();
+        $firstOrder = $cart->fresh()->convertedOrder;
+
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), [
+            ...$customer, 'checkout_idempotency_key' => fake()->uuid(), 'shipping_method_id' => $express->id,
+        ])->assertRedirect();
+        $secondOrder = $cart->fresh()->convertedOrder;
+
+        $this->assertNotSame($firstOrder->id, $secondOrder->id);
+        $this->assertSame(OrderStatus::Cancelled, $firstOrder->fresh()->status);
+        $this->assertSame($express->id, $secondOrder->shipping_method_id);
+        $this->assertSame(413, $secondOrder->shipping_method_snapshot['price_minor']);
+    }
+
+    public function test_checkout_order_is_immutable_but_editing_reopens_the_live_basket(): void
     {
         [$session, $variant, $asset] = $this->approved();
         $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id));
         $cart = Cart::query()->first();
-        $payload = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => fake()->uuid(), 'first_name' => ' Mia ', 'last_name' => 'Smith', 'email' => 'MIA@EXAMPLE.COM', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'sw1a 1aa', 'country' => 'GB'];
+        $payload = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => fake()->uuid(), 'shipping_method_id' => ShippingMethod::query()->value('id'), 'first_name' => ' Mia ', 'last_name' => 'Smith', 'email' => 'MIA@EXAMPLE.COM', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'sw1a 1aa', 'country' => 'GB'];
         $response = $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $payload);
         $order = $cart->fresh()->convertedOrder;
         $response->assertRedirect(route('checkout.payment', $order->number));
@@ -93,9 +166,21 @@ class CartCheckoutTest extends TestCase
         $this->assertNull($order->total_minor);
         $this->assertSame('mia@example.com', $order->email);
         $this->assertSame('SW1A 1AA', $order->shipping_address['postcode']);
+        $this->assertSame('active', $cart->fresh()->status);
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('cart.index'))
+            ->assertOk()->assertSee($session->product->name)->assertSee('Continue to checkout')->assertDontSee('Continue payment')->assertSee('Change artwork')->assertSee('Remove')->assertDontSee('Checkout in progress');
+        $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('checkout.show'))
+            ->assertOk()->assertSee('Where should we send it?')->assertSee('Order summary');
         $this->assertDatabaseHas('order_items', ['order_id' => $order->id, 'generation_asset_id' => $asset->id, 'unit_price_minor' => $variant->price_minor]);
-        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $payload)->assertRedirect(route('checkout.payment', $order->number));
-        $this->assertDatabaseCount('orders', 1);
+        $item = $cart->items()->first();
+        $this->withCookie('cattie_guest_token', 'owner-secret')->patch(route('cart.quantity', $item), ['quantity' => 2])->assertRedirect();
+        $this->assertSame('cancelled', $order->fresh()->status->value);
+        $this->assertNull($cart->fresh()->converted_order_id);
+        $this->assertSame(2, $item->fresh()->quantity);
+
+        $nextPayload = [...$payload, 'pricing_hash' => $cart->fresh()->pricing_hash, 'checkout_idempotency_key' => fake()->uuid()];
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $nextPayload)->assertRedirect();
+        $this->assertDatabaseCount('orders', 2);
         $variant->update(['price_minor' => 9999]);
         $this->assertSame(2499, $order->items()->first()->unit_price_minor);
         $this->withCookie('cattie_guest_token', 'other')->get(route('checkout.payment', $order->number))->assertNotFound();
@@ -108,7 +193,7 @@ class CartCheckoutTest extends TestCase
         $cart = Cart::query()->first();
         $oldHash = $cart->pricing_hash;
         $variant->update(['price_minor' => 2899]);
-        $payload = ['pricing_hash' => $oldHash, 'checkout_idempotency_key' => fake()->uuid(), 'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'mia@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A1AA', 'country' => 'GB'];
+        $payload = ['pricing_hash' => $oldHash, 'checkout_idempotency_key' => fake()->uuid(), 'shipping_method_id' => ShippingMethod::query()->value('id'), 'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'mia@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A1AA', 'country' => 'GB'];
         $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $payload)->assertSessionHasErrors('pricing_hash');
         $this->assertDatabaseCount('orders', 0);
         DB::table('artwork_sessions')->where('id', $session->id)->update(['status' => 'failed', 'expires_at' => now()->subDay()]);

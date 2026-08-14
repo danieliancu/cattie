@@ -241,14 +241,14 @@ class ArtworkController extends Controller
 
     public function variant(string $publicId, Request $request, RenderComposedDesign $render): RedirectResponse|JsonResponse
     {
-        $session = $this->owned($publicId, $request)->load(['product.variants', 'currentGeneration.assets']);
+        $session = $this->owned($publicId, $request)->load(['product.variants.fulfilmentMappings', 'currentGeneration.assets']);
         abort_unless($session->status === ArtworkSessionStatus::PreviewReady && $session->product->designTemplate, 409);
         $validated = $request->validate([
             'variant_id' => ['required', 'string'],
             'design_id' => [$request->expectsJson() ? 'required' : 'nullable', 'string'],
         ]);
         $variant = $session->product->variants->firstWhere('id', $validated['variant_id']);
-        abort_unless($variant?->is_active, 422);
+        abort_unless($variant?->is_active && $variant->hasSingleActiveFulfilmentMapping(), 422, 'This option is not currently available.');
         $currentDesign = null;
         if (isset($validated['design_id'])) {
             $currentDesign = $session->composedDesigns()->whereKey($validated['design_id'])->firstOrFail();

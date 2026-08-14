@@ -12,6 +12,7 @@ use Database\Seeders\CatalogueSeeder;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class LunchboxProductTest extends TestCase
@@ -68,6 +69,24 @@ class LunchboxProductTest extends TestCase
 
         $this->expectException(DomainException::class);
         $variants['white']->requiredPrintResolution();
+    }
+
+    public function test_unmapped_white_variant_is_disabled_and_rejected_before_artwork_generation(): void
+    {
+        $product = $this->lunchbox();
+        $white = $product->variants->first(fn (ProductVariant $variant) => $variant->options['colour'] === 'white');
+
+        $this->get(route('products.show', $product->slug))
+            ->assertOk()
+            ->assertSee('This option is not currently available')
+            ->assertSee('Unavailable');
+
+        $this->expectException(ValidationException::class);
+        app(StartArtworkSession::class)->handle($product, [
+            'variant_id' => $white->id,
+            'artwork_style_id' => $product->artworkStyles->first()->id,
+            'personalisation' => ['name' => 'Mia'],
+        ]);
     }
 
     public function test_template_and_variant_aware_marketing_gallery_are_prepared(): void

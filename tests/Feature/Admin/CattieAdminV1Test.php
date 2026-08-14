@@ -43,6 +43,8 @@ class CattieAdminV1Test extends TestCase
         $this->get('/admin/product-categories')->assertOk();
         $this->get('/admin/product-design-templates')->assertOk();
         $this->get('/admin/fulfilment-product-mappings')->assertOk();
+        $this->get('/admin/shipping-methods')->assertOk();
+        $this->get('/admin/shipping-methods/create')->assertOk();
         $this->get('/admin/admin-audit-logs')->assertOk();
         $this->get('/admin/products/'.$this->pencil()->id.'/edit')->assertOk();
         $this->get('/admin/product-design-templates/'.$this->pencil()->product_design_template_id.'/edit')->assertOk();

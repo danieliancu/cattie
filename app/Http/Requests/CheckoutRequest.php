@@ -27,6 +27,7 @@ class CheckoutRequest extends FormRequest
     {
         return [
             'pricing_hash' => ['required', 'string', 'size:64'], 'checkout_idempotency_key' => ['required', 'uuid'],
+            'shipping_method_id' => ['required', 'string', 'exists:shipping_methods,id'],
             'first_name' => ['required', 'string', 'max:100'], 'last_name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'email:rfc', 'max:254'], 'phone' => ['nullable', 'string', 'max:30'],
             'address_line_1' => ['required', 'string', 'max:150'], 'address_line_2' => ['nullable', 'string', 'max:150'],

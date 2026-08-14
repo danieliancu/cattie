@@ -26,6 +26,10 @@
 }
 
 @layer components {
+    .artwork-progress-overlay {
+        background-color: rgba(0, 0, 0, 0.8);
+    }
+
     @media (max-width: 767px) {
         .home-hero {
             background-image: none !important;

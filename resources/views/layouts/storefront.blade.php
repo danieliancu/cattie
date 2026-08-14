@@ -26,7 +26,7 @@
                         <a href="#" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">Sign In / Register</a>
                     </div>
                 </div>
-                <a href="{{ route('cart.index') }}" class="relative rounded-full p-1 {{ request()->routeIs('cart.*') ? 'text-coral' : 'text-ink' }}" aria-label="Basket"><i data-lucide="shopping-bag" class="h-5 w-5" aria-hidden="true"></i>@if($basketItemCount > 0)<span class="absolute -right-2 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-coral px-1 text-[10px] font-bold leading-none text-white" aria-label="{{ $basketItemCount }} items in basket">{{ $basketItemCount }}</span>@endif</a>
+                <a href="{{ route('cart.index') }}" class="relative rounded-full p-1 {{ request()->routeIs('cart.*') ? 'text-coral' : 'text-ink' }}" aria-label="Basket"><i data-lucide="shopping-cart" class="h-5 w-5" aria-hidden="true"></i>@if($basketItemCount > 0)<span class="absolute -right-2 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-coral px-1 text-[10px] font-bold leading-none text-white" aria-label="{{ $basketItemCount }} items in basket">{{ $basketItemCount }}</span>@endif</a>
                 <button type="button" class="rounded-full p-1 text-ink" @click="mobileMenu=!mobileMenu" :aria-expanded="mobileMenu" aria-controls="mobile-navigation" aria-label="Open menu"><i x-show="!mobileMenu" data-lucide="menu" class="h-6 w-6" aria-hidden="true"></i><i x-show="mobileMenu" data-lucide="x" class="h-6 w-6" aria-hidden="true"></i></button>
             </div>
         </div>

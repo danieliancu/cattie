@@ -16,7 +16,7 @@ class Order extends Model
 
     protected function casts(): array
     {
-        return ['status' => OrderStatus::class, 'shipping_address' => 'encrypted:array', 'is_payable' => 'boolean', 'placed_at' => 'datetime'];
+        return ['status' => OrderStatus::class, 'shipping_address' => 'encrypted:array', 'shipping_method_snapshot' => 'array', 'is_payable' => 'boolean', 'placed_at' => 'datetime'];
     }
 
     public function items()
@@ -27,6 +27,11 @@ class Order extends Model
     public function payments()
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function shippingMethod()
+    {
+        return $this->belongsTo(ShippingMethod::class)->withTrashed();
     }
 
     public function transitions()

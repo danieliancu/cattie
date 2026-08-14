@@ -37,6 +37,16 @@ class FakePaymentProvider implements PaymentProvider
         throw new RuntimeException('Refunds are outside Phase 5.');
     }
 
+    public function cancel(string $externalId): void
+    {
+        // The local fake provider has no external session to close.
+    }
+
+    public function retrieve(string $providerReference): PaymentResult
+    {
+        throw new RuntimeException('Fake payments do not require retrieval.');
+    }
+
     public function parseWebhook(string $payload, array $headers): array
     {
         throw new RuntimeException('Fake payments do not use HTTP webhooks.');

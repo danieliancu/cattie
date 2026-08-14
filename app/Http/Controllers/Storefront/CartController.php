@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Storefront;
 use App\Domain\Artwork\Actions\ApproveArtwork;
 use App\Domain\Artwork\Actions\RenderComposedDesign;
 use App\Domain\Cart\Actions\AddApprovedArtworkToCart;
+use App\Domain\Cart\Actions\AbandonCartCheckout;
 use App\Domain\Cart\Actions\RefreshCartPrices;
 use App\Domain\Cart\Actions\ResolveGuestCart;
 use App\Domain\Cart\Actions\UpdateCartQuantity;
@@ -61,37 +62,42 @@ class CartController extends Controller
     {
         [$cart] = $resolve->handle($request, false);
         if ($cart) {
-            $prices->handle($cart);
+            if (! $cart->converted_order_id) {
+                $prices->handle($cart);
+            }
             $cart->load(['items.artworkSession', 'items.generationAsset', 'items.composedDesign', 'items.variant', 'items.product.images']);
         }
 
         return view('storefront.cart.index', compact('cart'));
     }
 
-    public function quantity(CartItem $item, Request $request, ResolveGuestCart $resolve, UpdateCartQuantity $update): RedirectResponse
+    public function quantity(CartItem $item, Request $request, ResolveGuestCart $resolve, UpdateCartQuantity $update, AbandonCartCheckout $abandonCheckout): RedirectResponse
     {
         $cart = $this->ownedCart($request, $resolve);
         abort_unless($item->cart_id === $cart->id, 404);
         $data = $request->validate(['quantity' => ['required', 'integer', 'min:1', 'max:'.config('commerce.max_quantity')]]);
+        $abandonCheckout->handle($cart);
         $update->handle($item, (int) $data['quantity']);
 
         return back();
     }
 
-    public function remove(CartItem $item, Request $request, ResolveGuestCart $resolve): RedirectResponse
+    public function remove(CartItem $item, Request $request, ResolveGuestCart $resolve, AbandonCartCheckout $abandonCheckout): RedirectResponse
     {
         $cart = $this->ownedCart($request, $resolve);
         abort_unless($item->cart_id === $cart->id, 404);
+        $abandonCheckout->handle($cart);
         $item->delete();
         app(RefreshCartPrices::class)->handle($cart);
 
         return back();
     }
 
-    public function changeArtwork(CartItem $item, Request $request, ResolveGuestCart $resolve): RedirectResponse
+    public function changeArtwork(CartItem $item, Request $request, ResolveGuestCart $resolve, AbandonCartCheckout $abandonCheckout): RedirectResponse
     {
         $cart = $this->ownedCart($request, $resolve);
         abort_unless($item->cart_id === $cart->id, 404);
+        $abandonCheckout->handle($cart);
         $session = $item->artworkSession()->with('product')->firstOrFail();
         $item->delete();
         $session->update([

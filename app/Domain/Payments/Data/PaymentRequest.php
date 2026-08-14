@@ -10,5 +10,10 @@ final readonly class PaymentRequest
         public string $currency,
         public string $idempotencyKey,
         public string $scenario = 'success',
+        public ?string $paymentId = null,
+        public ?string $orderNumber = null,
+        public ?string $email = null,
+        public array $lineItems = [],
+        public ?string $returnUrl = null,
     ) {}
 }

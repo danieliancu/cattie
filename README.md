@@ -2,6 +2,8 @@
 
 Current architecture, implemented functionality, operational status and known gaps are maintained in [APPLICATION_STATUS.md](APPLICATION_STATUS.md). Update that living report whenever the application changes.
 
+UK delivery methods are managed in **Admin → Operations → Shipping Methods**. Checkout uses active methods for the common fulfilment provider of every basket item, and the accepted Order freezes the price, estimate, provider and provider service code for Stripe and future fulfilment.
+
 ## Local End-to-End Development
 
 The local journey uses fake AI and fake payment providers. No OpenAI, Stripe or fulfilment credentials are required.
@@ -14,7 +16,6 @@ AI_IMAGE_FAKE_FAILURE=false
 QUEUE_CONNECTION=database
 PAYMENT_PROVIDER=fake
 FAKE_PAYMENTS_ENABLED=true
-CHECKOUT_SHIPPING_STRATEGY=free_uk
 CHECKOUT_TAX_STRATEGY=zero_uk
 ```
 
@@ -45,6 +46,33 @@ The worker is required with the database queue. After changing `.env`, run `php 
 Open `http://127.0.0.1:8000`, choose a product, variant and style, enter its personalisation, upload a JPEG/PNG/WebP photo, wait for the fake preview, optionally regenerate, approve, add it to the basket, complete UK checkout, then choose **Complete test payment**. The final order should be `Paid`.
 
 For failure recovery, set `AI_IMAGE_FAKE_FAILURE=true`, clear config and restart the worker. After the safe failure screen appears, restore `false`, clear config, restart the worker and select **Try again**.
+
+## Stripe Checkout (test mode)
+
+Stripe Checkout uses Cattie's order snapshots and creates dynamic line items. It does not require Stripe Products or Prices.
+
+```env
+PAYMENT_PROVIDER=stripe
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+Clear cached configuration after changing these values:
+
+```powershell
+php artisan config:clear
+```
+
+For local webhook forwarding, install and authenticate the Stripe CLI, then run:
+
+```powershell
+stripe listen --forward-to http://127.0.0.1:8000/api/webhooks/stripe
+```
+
+Copy the `whsec_...` value printed by the CLI into `STRIPE_WEBHOOK_SECRET`. Complete a sandbox purchase with Stripe's standard successful test card `4242 4242 4242 4242`, any future expiry date and any CVC. The browser return and signed webhook both use the same idempotent reconciliation path; an order is confirmed only after Stripe reports it paid.
+
+The Stripe payment form is embedded directly in the Cattie payment page. Dynamic Payment Methods are controlled in the Stripe Dashboard; methods that require bank authorization can temporarily redirect the customer and return through Cattie. Do not commit Stripe secrets. The `pk_...` key is intentionally browser-visible, while `sk_...` and `whsec_...` must remain server-side. Cattie remains authoritative for products, prices, shipping, tax and order totals; non-zero discounts are intentionally rejected until a Stripe discount strategy is implemented.
 
 ---
 

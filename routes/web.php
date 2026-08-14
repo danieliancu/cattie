@@ -49,4 +49,7 @@ Route::get('/checkout', [CheckoutController::class, 'show'])->name('checkout.sho
 Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 Route::get('/checkout/{orderNumber}/payment', [CheckoutController::class, 'payment'])->name('checkout.payment');
 Route::post('/checkout/{orderNumber}/payment', [CheckoutController::class, 'pay'])->middleware('throttle:10,1')->name('checkout.pay');
+Route::post('/checkout/{orderNumber}/payment/stripe-session', [CheckoutController::class, 'stripeSession'])->middleware('throttle:10,1')->name('checkout.stripe-session');
+Route::post('/checkout/{orderNumber}/payment/stripe-status', [CheckoutController::class, 'stripeStatus'])->middleware('throttle:60,1')->name('checkout.stripe-status');
+Route::get('/checkout/{orderNumber}/payment/stripe-return', [CheckoutController::class, 'stripeReturn'])->name('checkout.stripe-return');
 Route::get('/orders/{orderNumber}/confirmation', [CheckoutController::class, 'confirmation'])->name('orders.confirmation');
