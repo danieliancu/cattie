@@ -58,6 +58,35 @@ class CartCheckoutTest extends TestCase
             ->assertSee('h-auto w-[100px]', false)->assertSee('ml-auto w-[100px] shrink-0 text-center text-base font-bold', false);
     }
 
+    public function test_guest_order_creation_is_unaffected_by_customer_profile_feature(): void
+    {
+        [$session] = $this->approved();
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id));
+        $cart = Cart::query()->firstOrFail();
+        $payload = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => fake()->uuid(), 'shipping_method_id' => ShippingMethod::query()->value('id'), 'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'guest@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A1AA', 'country' => 'GB'];
+
+        $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $payload)->assertRedirect();
+
+        $order = $cart->fresh()->convertedOrder;
+        $this->assertNull($order->user_id);
+        $this->assertSame('guest@example.com', $order->email);
+    }
+
+    public function test_authenticated_order_creation_is_unaffected_by_customer_profile_feature(): void
+    {
+        [$session] = $this->approved();
+        $user = User::factory()->create(['email' => 'customer@example.com', 'is_admin' => false]);
+        $this->actingAs($user)->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id));
+        $cart = Cart::query()->firstOrFail();
+        $payload = ['pricing_hash' => $cart->pricing_hash, 'checkout_idempotency_key' => fake()->uuid(), 'shipping_method_id' => ShippingMethod::query()->value('id'), 'first_name' => 'Mia', 'last_name' => 'Smith', 'email' => 'customer@example.com', 'address_line_1' => '1 High Street', 'city' => 'London', 'postcode' => 'SW1A1AA', 'country' => 'GB'];
+
+        $this->actingAs($user)->withCookie('cattie_guest_token', 'owner-secret')->post(route('checkout.store'), $payload)->assertRedirect();
+
+        $order = $cart->fresh()->convertedOrder;
+        $this->assertSame($user->id, $order->user_id);
+        $this->assertNull($user->customerProfile);
+    }
+
     private function approved(string $token = 'owner-secret'): array
     {
         Storage::fake('local');

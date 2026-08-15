@@ -1,8 +1,11 @@
 <?php
 
+use App\Http\Controllers\Storefront\AddressAutocompleteController;
+use App\Http\Controllers\Storefront\AddressLookupController;
 use App\Http\Controllers\Storefront\ArtworkController;
 use App\Http\Controllers\Storefront\AccountController;
 use App\Http\Controllers\Storefront\CartController;
+use App\Http\Controllers\Storefront\CustomerProfileController;
 use App\Http\Controllers\Storefront\CheckoutController;
 use App\Http\Controllers\Storefront\CustomerAuthController;
 use App\Http\Controllers\Storefront\HomeController;
@@ -26,6 +29,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/account/orders', [AccountController::class, 'orders'])->name('account.orders.index');
     Route::get('/account/orders/{orderNumber}', [AccountController::class, 'show'])->name('account.orders.show');
     Route::get('/account/orders/{orderNumber}/items/{item}/artwork', [AccountController::class, 'artwork'])->name('account.orders.artwork');
+    Route::get('/account/details', [CustomerProfileController::class, 'edit'])->name('account.details');
+    Route::patch('/account/details', [CustomerProfileController::class, 'update'])->middleware('throttle:60,1')->name('account.details.update');
 });
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');
 Route::get('/products/{slug}', [ProductController::class, 'show'])->name('products.show');
@@ -60,6 +65,9 @@ Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
 Route::patch('/cart/items/{item}/quantity', [CartController::class, 'quantity'])->name('cart.quantity');
 Route::delete('/cart/items/{item}', [CartController::class, 'remove'])->name('cart.remove');
 Route::post('/cart/items/{item}/change-artwork', [CartController::class, 'changeArtwork'])->name('cart.change-artwork');
+Route::get('/address-lookup', AddressLookupController::class)->middleware('throttle:20,1')->name('address-lookup');
+Route::get('/address-autocomplete', [AddressAutocompleteController::class, 'suggest'])->middleware('throttle:60,1')->name('address-autocomplete');
+Route::get('/address-autocomplete/{placeId}', [AddressAutocompleteController::class, 'resolve'])->middleware('throttle:60,1')->name('address-autocomplete.resolve');
 Route::get('/checkout', [CheckoutController::class, 'show'])->name('checkout.show');
 Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 Route::get('/checkout/{orderNumber}/payment', [CheckoutController::class, 'payment'])->name('checkout.payment');

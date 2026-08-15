@@ -24,7 +24,7 @@ class StorefrontCatalogueTest extends TestCase
             ->assertSee('product-search-results')->assertSee('filteredProducts()', false)
             ->assertSee('@focus="searchOpen=true"', false)
             ->assertSee('Get unique gift ideas')->assertSee('Subscribe')->assertSee('About Us')->assertSee('Customer Service')->assertSee('Contact Us')
-            ->assertSee('Email:support@cattie.uk')->assertDontSee('uk.callie.com')->assertDontSee('messenger.com')->assertDontSee('wa.me');
+            ->assertSee('Email:support@kattie.uk')->assertDontSee('uk.callie.com')->assertDontSee('messenger.com')->assertDontSee('wa.me');
         $this->assertLessThan(strpos($response->getContent(), 'Second Gift'), strpos($response->getContent(), 'First Gift'));
         $this->get(route('products.index', ['q' => 'First']))->assertOk()->assertSee('First Gift')
             ->assertViewHas('products', fn ($products) => $products->count() === 1 && $products->first()->name === 'First Gift');

@@ -1,4 +1,4 @@
-<x-layouts.storefront :title="$product->meta_title ?: $product->name.' | Cattie.uk'" :description="$product->meta_description" :canonical="isset($previewRobots) ? null : route('products.show',$product->slug)" :robots="$previewRobots ?? null">
+<x-layouts.storefront :title="$product->meta_title ?: $product->name.' | Kattie.uk'" :description="$product->meta_description" :canonical="isset($previewRobots) ? null : route('products.show',$product->slug)" :robots="$previewRobots ?? null">
 <nav class="shell pt-8 text-sm text-muted" aria-label="Breadcrumb"><ol class="flex flex-wrap items-center gap-2"><li><a class="hover:text-coral" href="{{ route('home') }}">Home</a></li><li aria-hidden="true">→</li><li><a class="hover:text-coral" href="{{ route('products.index') }}">Shop</a></li><li aria-hidden="true">→</li><li aria-current="page">{{ $product->name }}</li></ol></nav>
 @php($processing=$session && in_array($session->status->value, ['preparing_photo','generating']))
 @php($editing=$session && $session->status->value==='awaiting_upload')

@@ -1,10 +1,10 @@
-<x-layouts.storefront title="Sitemap | Cattie.uk" description="Explore Cattie.uk products, collections and customer information." :canonical="route('sitemap')">
+<x-layouts.storefront title="Sitemap | Kattie.uk" description="Explore Kattie.uk products, collections and customer information." :canonical="route('sitemap')">
     <nav class="shell pt-10 text-sm text-muted" aria-label="Breadcrumb">
         <ol class="flex items-center gap-2"><li><a class="hover:text-coral" href="{{ route('home') }}">Home</a></li><li aria-hidden="true">→</li><li aria-current="page">Sitemap</li></ol>
     </nav>
 
     <section class="shell py-12 sm:py-16">
-        <div class="max-w-2xl"><p class="eyebrow">Find your way</p><h1 class="mt-4 font-display text-5xl sm:text-6xl">Sitemap</h1><p class="mt-5 text-lg leading-8 text-muted">Browse the main areas, collections and personalised gifts available on Cattie.uk.</p></div>
+        <div class="max-w-2xl"><p class="eyebrow">Find your way</p><h1 class="mt-4 font-display text-5xl sm:text-6xl">Sitemap</h1><p class="mt-5 text-lg leading-8 text-muted">Browse the main areas, collections and personalised gifts available on Kattie.uk.</p></div>
 
         <div class="mt-12 grid gap-x-12 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
             <section>

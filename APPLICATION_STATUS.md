@@ -4,7 +4,7 @@
 >
 > **Regulă de întreținere:** acest fișier trebuie actualizat la fiecare modificare care schimbă funcționalitatea, arhitectura, schema de date, configurarea, interfața, asseturile, integrările, testele sau limitările cunoscute. O schimbare nu este considerată documentată complet până când secțiunile afectate și jurnalul de la final reflectă noua stare.
 >
-> **Ultima actualizare:** 14 august 2026.
+> **Ultima actualizare:** 15 august 2026.
 
 ## 1. Rezumat executiv
 
@@ -22,6 +22,8 @@ Aplicația include în prezent:
 - PNG transparent, full-resolution, cu metadata 300 PPI pentru tipografie;
 - basket, checkout UK, plăți fake și Stripe Embedded Checkout fără catalog Stripe;
 - conturi storefront opționale, autentificare pe sesiune și istoric privat de comenzi;
+- profil de client (`CustomerProfile`) cu o adresă de livrare implicită, pagină `My Details` cu autosave și prefill automat al checkout-ului pentru clienții autentificați;
+- lookup de postcode UK printr-un provider înlocuibil, cu `Postcodes.io` ca implementare gratuită implicită pentru validare/normalizare;
 - modele și stări pentru producție/fulfilment;
 - integrare de catalog și quotes Prodigi și webhook-uri TreatPod;
 - panou administrativ Filament;
@@ -373,6 +375,29 @@ Exemplu: `2185 × 898 px / 300 PPI = aproximativ 185 × 76 mm`.
 - statusurile au etichete publice prietenoase, iar thumbnails sunt livrate printr-o rută privată scoped la Order și OrderItem;
 - o comandă guest poate fi revendicată individual numai când browserul dovedește tokenul existent și emailul contului coincide; nu există revendicare în masă după email.
 
+### My Details și profilul de client
+
+- `CustomerProfile` este un profil minimal per utilizator (`user_id` unic), cu prenume, nume, telefon opționale și o singură adresă de livrare implicită (`default_shipping_address`); nu există carte de adrese cu adrese multiple;
+- adresa implicită este criptată la nivel de cast Eloquent (`encrypted:array`) și ascunsă din serializare, exact ca `Order.shipping_address`; emailul rămâne autoritativ pe `User.email`, nu este duplicat pe profil;
+- `/account/details` ("My Details") afișează formularul comun de date client, populat din profil (dacă există) și din `User.email`; salvarea este autosave pe blur, câmp cu câmp, prin `PATCH /account/details`, care întoarce JSON și afișează `Saving…` / `✓ Saved` / `Couldn't save — try again`;
+- validarea pentru My Details permite actualizări parțiale (`sometimes`/`nullable` pe fiecare câmp în afară de email) — clientul poate salva doar prenumele fără să fie obligat să completeze adresa; validarea de checkout rămâne strictă și neschimbată;
+- schimbarea emailului din My Details normalizează lowercase, verifică unicitatea față de `users` excluzând contul curent, actualizează `User.email` fără logout și fără să modifice emailul istoric al comenzilor deja plasate; nu există verificare de email în această fază;
+- formularul de date client (`resources/views/components/customer-details-form.blade.php`) este un singur component Blade partajat între Checkout și My Details, cu atribute `autocomplete` corecte pentru fiecare câmp;
+- la checkout, pentru clienți autentificați, câmpurile sunt pre-completate cu prioritate: `old()` → adresa comenzii pending existente → profilul salvat → `User.email` → gol; pentru guest, lanțul se reduce exact la comportamentul anterior (`old()` → comandă pending → gol);
+- checkout-ul NU suprascrie niciodată automat adresa implicită; când adresa introdusă diferă (comparație server-side normalizată, fără spații/case) de adresa salvată, apare opțional checkbox-ul `Save this as my default address` — profilul este actualizat numai dacă este bifat, după crearea comenzii; dacă adresa introdusă este deja identică cu cea salvată, checkbox-ul nu apare;
+- `Order.shipping_address`/`email`/`phone` rămân snapshot imuabil per comandă; editările ulterioare ale `CustomerProfile` nu modifică niciodată o comandă deja plasată.
+
+### Lookup de postcode UK
+
+- `AddressLookupProvider` este o interfață înlocuibilă (`app/Contracts/AddressLookupProvider.php`), selectată prin `ADDRESS_LOOKUP_PROVIDER` (config `address_lookup.provider`), cu binding în `AppServiceProvider`, după același tipar ca `PaymentProvider`/`ImageGenerationProvider`;
+- providerul implicit al repository-ului (fără configurare) este `PostcodesIoAddressLookupProvider`, fără cheie API, folosind Postcodes.io doar pentru validare/normalizare de postcode UK — nu întoarce niciodată o listă de adrese la nivel de proprietate individuală (`addresses` este întotdeauna gol pentru acest provider);
+- este disponibil și un al doilea provider, la nivel de proprietate, `HomedataAddressLookupProvider` (Homedata, `https://api.homedata.co.uk`), care întoarce efectiv lista de adrese pentru un postcode prin endpoint-ul lor `GET /address/postcode/{postcode}/`; se activează prin `ADDRESS_LOOKUP_PROVIDER=homedata` + `HOMEDATA_API_KEY` (cont gratuit, fără card, 100 apeluri/lună); câmpurile Homedata (`building_number`, `street`, `building_name`, `sub_building`, `town`) sunt normalizate în `address_line_1`/`address_line_2`/`city`; Homedata nu întoarce comitat/county, astfel încât acest câmp rămâne gol (opțional, ca peste tot în aplicație); lipsa cheii API sau orice eșec al providerului degradează grațios la `valid:false`, fără să apeleze extern și fără să blocheze introducerea manuală;
+- endpoint-ul `GET /address-lookup` (throttled `20,1`, fără autentificare, disponibil și la guest checkout) primește doar postcode-ul, normalizează local, respinge formatele invalide fără să apeleze providerul și întoarce mereu `{valid, postcode, addresses}`; eșecul/timeout-ul providerului extern nu produce niciodată 500 și nu blochează checkout-ul — răspunsul este `valid:false` cu mesaj prietenos pentru introducere manuală;
+- componenta de formular distinge explicit cele două stări de eșec/succes fără adrese: postcode invalid/lookup eșuat → „We couldn't look up that postcode. You can enter your address manually below.”; postcode valid dar fără listă de proprietăți (cazul Postcodes.io) → „Postcode confirmed — enter the rest of your address below.”; lista de adrese (când există, ca la Homedata) apare într-un selector, cu opțiunea „Enter address manually” explicită;
+- normalizarea de postcode este extrasă într-o singură clasă reutilizabilă (`App\Support\UkPostcode`), folosită identic de `CheckoutRequest`, `CustomerProfileController`/`UpdateCustomerProfile` și `AddressLookupController`;
+- arhitectura este pregătită pentru înlocuirea/adăugarea altor provideri la nivel de proprietate (ex. Ideal Postcodes, getAddress.io) doar prin configurare, fără modificări în Checkout sau My Details — Homedata este dovada că acest tipar funcționează;
+- county rămâne opțional peste tot și nu blochează niciodată checkout-ul sau lookup-ul.
+
 ### Stări de comandă
 
 Sunt modelate stările de la draft și artwork până la paid, print asset, fulfilment, production, shipping, delivery, failure, cancellation și refund. Tranzițiile sunt auditate prin `OrderStatusTransition`.
@@ -426,7 +451,7 @@ Modelele acoperă:
 - catalog: Product, ProductVariant, ProductImage, ProductCategory, ArtworkStyle, personalisation fields;
 - template-uri: ProductDesignTemplate, DesignTemplateVersion, assignments;
 - artwork: ArtworkSession, Upload/UploadAsset, Generation/GenerationAsset, ComposedDesign;
-- commerce: User, Cart/CartItem, Order/OrderItem, Payment și ShippingMethod;
+- commerce: User, CustomerProfile, Cart/CartItem, Order/OrderItem, Payment și ShippingMethod;
 - producție: PrintAsset, FulfilmentProductMapping, FulfilmentSubmission, Shipment;
 - observabilitate: AnalyticsEvent, AdminAuditLog, WebhookEvent, OrderStatusTransition;
 - platformă: User, slug redirects.
@@ -460,6 +485,9 @@ Snapshot-urile de personalizare și artwork sunt păstrate pe entitățile tranz
 - idempotency este folosită la generation, checkout și payment;
 - prețurile, ownership-ul, varianta și artwork-ul aprobat sunt reverificate server-side;
 - fișierele de tipar și preview-urile nu sunt expuse direct ca storage paths publice.
+- `CustomerProfile.default_shipping_address` folosește aceeași convenție `encrypted:array` + `$hidden` ca `Order.shipping_address`;
+- lookup-ul de adresă primește exclusiv postcode-ul — niciodată nume, email, telefon, date de comandă sau de artwork — și nu loghează postcode-ul în caz de eșec, doar operația și statusul HTTP;
+- schimbarea emailului din My Details nu adaugă (re)verificare de email — rămâne în limitarea existentă de lipsă a verificării de email pentru conturile clienților.
 
 ## 14. Admin Filament
 
@@ -479,7 +507,7 @@ Panoul este disponibil sub `/admin` și include:
 
 ## 15. Rute și suprafețe publice
 
-Aplicația are 69 de rute non-vendor. Grupurile principale:
+Aplicația are 72 de rute non-vendor (69 anterior + 3 noi în această fază). Grupurile principale:
 
 - home, products, categories, related content și sitemap;
 - artwork start/show/upload/status/assets/original/regenerate/cancel;
@@ -488,13 +516,14 @@ Aplicația are 69 de rute non-vendor. Grupurile principale:
 - basket quantity/remove;
 - checkout, payment, Stripe embedded session/status, Stripe return și confirmation;
 - register, login/logout, account overview, order history/detail și artwork privat per OrderItem;
+- account details (My Details, `GET`/`PATCH /account/details`) și lookup de adresă UK (`GET /address-lookup`);
 - pagini FAQ, delivery, returns, privacy, terms, payments și cookies;
 - webhook-uri Stripe și TreatPod;
 - resurse admin Filament.
 
 ## 16. Testare și starea verificărilor
 
-Repository-ul conține 30 de fișiere de test Feature, grupate în:
+Repository-ul conține 33 de fișiere de test Feature, grupate în:
 
 - Admin;
 - Artwork;
@@ -522,7 +551,9 @@ Verificări recente trecute:
 
 - testele Stripe, payment și cart: 19 teste, 172 assertions;
 - build Vite production pentru Embedded Checkout;
-- suita completă curentă: 161 teste trecute și 6 eșecuri preexistente/nelegate de Customer Account (artwork regeneration lineage și assertions de markup ale workspace-ului/catalogului);
+- teste noi pentru My Details/checkout prefill/lookup de adresă: `CustomerProfileTest` (16 teste, 65 assertions), `CheckoutPrefillTest` (12 teste, 45 assertions), `AddressLookupTest` (7 teste, 32 assertions), plus 2 teste noi de regresie în `CartCheckoutTest`;
+- suita `tests/Feature/Commerce` completă după această fază: 70 teste trecute, 452 assertions;
+- suita completă curentă: 198 teste trecute și 6 eșecuri preexistente/nelegate de Customer Account/Checkout (artwork regeneration lineage și assertions de markup ale workspace-ului/catalogului);
 
 - PNG 300 PPI, `pHYs`, alpha și dimensiuni fizice;
 - Pencil Tin final și preview la schimbarea variantei;
@@ -587,6 +618,9 @@ php artisan prodigi:quote <SKU>
 6. Curățarea assertions de markup vechi și rularea periodică a suitei complete.
 7. Monitorizare operațională pentru queue, AI failures, fulfilment și storage growth.
 8. Password reset, email verification, 2FA, social login și hardening avansat pentru conturile clienților.
+9. Nu există carte de adrese/adrese salvate multiple, etichete (Home/Work), adresă de facturare separată sau CRUD de adrese — `CustomerProfile` are o singură adresă de livrare implicită per client.
+10. `Postcodes.io` (providerul implicit din `.env.example`) nu întoarce o listă de adrese la nivel de proprietate. Pentru dropdown real de adrese este disponibil `HomedataAddressLookupProvider` (`ADDRESS_LOOKUP_PROVIDER=homedata`), cu tier gratuit de 100 apeluri/lună fără card; peste acest volum, sau pentru date suplimentare (ex. county), e nevoie de un cont plătit Homedata sau de comutarea către alt provider (Ideal Postcodes, getAddress.io) prin aceeași variabilă.
+11. Schimbarea emailului din My Details nu declanșează verificare de email (consistent cu punctul 8).
 
 ## 19. Protocol obligatoriu de actualizare
 
@@ -688,3 +722,29 @@ Documentul trebuie să descrie codul care există efectiv. Funcțiile planificat
 - confirmation oferă guest-ului revendicarea opțională a unei singure comenzi, protejată prin token și email;
 - testele Account, Cart, Payment, Stripe și end-to-end au trecut împreună: 33 teste și 335 assertions; suita completă a încheiat cu 161 passed, 6 failed, fără eșec nou în funcționalitatea Account.
 - formularele logout folosesc acțiune relativă pe hostul curent și submit explicit, evitând pierderea cookie-ului de sesiune când mediul local este accesat printr-un hostname diferit.
+
+### 15 august 2026 — My Details, formular partajat de checkout și fundația de lookup postcode UK
+
+- adăugat `CustomerProfile` (`user_id` unic, prenume/nume/telefon opționale, `default_shipping_address` criptat `encrypted:array`), relația `User::customerProfile()` și migrarea `2026_08_15_000100_create_customer_profiles`;
+- extrasă normalizarea de postcode din `CheckoutRequest` în `App\Support\UkPostcode`, folosită acum identic de checkout, My Details și lookup-ul de adresă; comportamentul existent de checkout a rămas byte-identic, verificat prin suita `CartCheckoutTest` neschimbată;
+- adăugat `App\Support\ShippingAddressComparator` pentru compararea server-side, normalizată (fără spații/case, fără nume, fără country) a adresei introduse față de adresa implicită salvată;
+- adăugată fundația de lookup de adresă UK: interfața `AddressLookupProvider`, DTO-urile `AddressLookupResult`/`AddressLookupAddress`, providerul gratuit `PostcodesIoAddressLookupProvider` (fără cheie API, doar validare/normalizare, `addresses` mereu gol), `config/address_lookup.php`, binding în `AppServiceProvider` selectabil prin `ADDRESS_LOOKUP_PROVIDER`, și endpoint-ul public `GET /address-lookup` (throttled `20,1`), care nu blochează niciodată checkout-ul la eșec/timeout extern;
+- adăugat componentul Blade partajat `resources/views/components/customer-details-form.blade.php` (contact + adresă, postcode-first cu „Find address” și fallback „Enter address manually”, atribute `autocomplete` corecte), folosit atât în Checkout, cât și în My Details — nu mai există două implementări separate ale formularului;
+- adăugată pagina `My Details` (`GET /account/details`) cu autosave pe blur, câmp cu câmp, prin `PATCH /account/details` (`CustomerProfileController`, acțiunea `UpdateCustomerProfile`), cu validare parțială (`sometimes`/`nullable`) care permite salvarea unui singur câmp; schimbarea emailului normalizează, verifică unicitatea și actualizează `User.email` fără logout și fără să modifice emailul istoric al comenzilor; adăugat tab-ul „My Details” în navigarea contului, între „My Orders” și „Sign out” („My Characters” nu a fost adăugat — nu există pe `main`);
+- `CheckoutController::show()` pre-completează formularul pentru clienți autentificați cu prioritatea `old()` → adresa comenzii pending → `CustomerProfile` → `User.email` → gol, fără să afecteze idempotența comenzii pending existente; `CheckoutController::store()` actualizează `CustomerProfile` numai când clientul bifează explicit „Save this as my default address” și adresa introdusă diferă de cea salvată — `Order.shipping_address`/`email`/`phone` rămân snapshot imuabil neschimbat de editările ulterioare ale profilului;
+- teste noi: `CustomerProfileTest` (16 teste), `CheckoutPrefillTest` (12 teste), `AddressLookupTest` (7 teste), plus 2 teste de regresie în `CartCheckoutTest`; suita `tests/Feature/Commerce` a trecut integral (70 teste, 452 assertions), iar suita completă a înregistrat 198 teste trecute și aceleași 6 eșecuri preexistente, nelegate de această schimbare (workspace/catalogue markup și lineage de regenerare artwork).
+
+### 15 august 2026 — corecție mesaj lookup și al doilea provider de adresă (Homedata)
+
+- corectată componenta `customer-details-form`: mesajul „couldn't look up” apărea la fiecare căutare de postcode, inclusiv la succes, pentru că Postcodes.io întoarce mereu `addresses: []`; acum sunt distinse explicit postcode invalid/eșec (`valid:false`) de postcode valid fără listă de proprietăți (`valid:true`, `addresses: []`), fiecare cu mesajul potrivit;
+- adăugat al doilea provider de lookup, `HomedataAddressLookupProvider` (`app/Providers/AddressLookup/HomedataAddressLookupProvider.php`), care întoarce efectiv adrese la nivel de proprietate din tier-ul gratuit Homedata (100 apeluri/lună, fără card); activabil prin `ADDRESS_LOOKUP_PROVIDER=homedata` + `HOMEDATA_API_KEY`, fără nicio modificare în Checkout, My Details sau componenta partajată — confirmă că abstracția `AddressLookupProvider` suportă comutarea de provider fără cuplare la Postcodes.io;
+- teste noi: `HomedataAddressLookupProviderTest` (5 teste); suita `tests/Feature/Commerce` completă: 75 teste trecute, 463 assertions.
+
+### 15 august 2026 — autocomplete de adresă cu Google Places (New) și rebranding Kattie.uk
+
+- brand-ul storefront a fost redenumit `Kattie.uk` peste tot (titluri, meta, header, footer, email de contact); iconul SVG „cat" din header/footer a fost înlocuit cu `public/images/icon.gif`; tagline-ul footer devine „LITTLE FACES. BIG LOVE";
+- UX-ul de căutare adresă a fost înlocuit cu autocomplete text-liber (Google Places API (New) — Autocomplete + Place Details), nu mai este postcode-first: clientul scrie adresa, primește sugestii live (debounce 300ms), alege una și câmpurile (address_line_1/2, city, county, postcode) se completează automat; câmpurile rămân oricând editabile manual;
+- adăugate `GooglePlacesAddressLookupProvider::suggest()`/`resolve()` (metode publice specifice, în afara interfeței `AddressLookupProvider`, folosite direct de noul `AddressAutocompleteController`), rute `GET /address-autocomplete` (`throttle:60,1`) și `GET /address-autocomplete/{placeId}` (`throttle:60,1`), fără autentificare (disponibile și la guest checkout);
+- providerul primește la `suggest()` doar textul introdus de client (fără nume/email/telefon/date comandă); niciun eșec al Google Places nu produce 500 — răspunsul e mereu `{"suggestions":[]}` sau `{"resolved":false}`, cu introducere manuală mereu disponibilă;
+- constatare importantă: nici Postcodes.io, nici Google Places nu pot întoarce „toate adresele de la un cod poștal" — Postcodes.io validează doar, iar Google Places rezolvă un cod poștal la nivel de zonă, nu de proprietăți individuale; `HomedataAddressLookupProvider` (cu cheie server corectă, tip `prefix.secret`) rămâne singura opțiune pentru acel flux specific, dacă va fi nevoie ulterior;
+- teste noi: `AddressAutocompleteTest` (6 teste); suita `tests/Feature/Commerce` completă: 81 teste trecute, 476 assertions; suita completă a aplicației: 209 teste trecute, aceleași 6 eșecuri preexistente nelegate de această schimbare.

@@ -1,6 +1,6 @@
-<x-layouts.storefront title="Personalised gifts | Cattie.uk" description="Browse personalised family, children and pet gifts created from your favourite photographs." :canonical="$canonical" :robots="$robots">
+<x-layouts.storefront title="Personalised gifts | Kattie.uk" description="Browse personalised family, children and pet gifts created from your favourite photographs." :canonical="$canonical" :robots="$robots">
     <section class="shell py-12 sm:py-20">
-        <div class="max-w-2xl"><p class="eyebrow hidden sm:block">The Cattie collection</p><h1 class="font-display text-2xl sm:mt-4 sm:text-6xl">A favourite photo, made unforgettable.</h1><p class="mt-6 hidden text-lg leading-8 text-muted sm:block">Choose the gift first. We’ll help you turn your photograph into artwork you love before it’s ever made.</p></div>
+        <div class="max-w-2xl"><p class="eyebrow hidden sm:block">The Kattie collection</p><h1 class="font-display text-2xl sm:mt-4 sm:text-6xl">A favourite photo, made unforgettable.</h1><p class="mt-6 hidden text-lg leading-8 text-muted sm:block">Choose the gift first. We’ll help you turn your photograph into artwork you love before it’s ever made.</p></div>
         @if($categories->isNotEmpty())
             <nav class="sm:mt-10" aria-labelledby="shop-by-category">
                 <h2 id="shop-by-category" class="hidden font-display text-2xl sm:block">Shop by category</h2>

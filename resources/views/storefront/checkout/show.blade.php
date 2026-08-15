@@ -1,14 +1,17 @@
-<x-layouts.storefront title="Checkout details | Cattie.uk" description="Enter delivery details for your personalised gift.">
+<x-layouts.storefront title="Checkout details | Kattie.uk" description="Enter delivery details for your personalised gift.">
 <section class="shell py-12 sm:py-20">
     <div class="mx-auto max-w-5xl" x-data="{shippingMethodId:@js(old('shipping_method_id', $selectedShippingMethodId)), methods:@js($availableShippingMethods->mapWithKeys(fn($method)=>[$method->id=>['price_minor'=>$method->price_minor,'name'=>$method->name]])), subtotal:@js($cart->subtotalMinor()), shippingPrice(){return this.methods[this.shippingMethodId]?.price_minor ?? 0}, money(value){return new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(value/100)}}">
         <div class="grid items-start gap-8 lg:grid-cols-[1fr_20rem]">
             <div>
                 <p class="eyebrow">Checkout</p><h1 class="mt-3 font-display text-5xl">Where should we send it?</h1><p class="mt-4 text-muted">No payment is taken at this stage.</p>
-                <form id="checkout-details-form" method="POST" action="{{ route('checkout.store') }}" class="mt-10 grid gap-5 rounded-[2rem] bg-white p-6 sm:grid-cols-2 sm:p-9">@csrf
+                <form id="checkout-details-form" method="POST" action="{{ route('checkout.store') }}" class="mt-10 rounded-[2rem] bg-white p-6 sm:p-9">@csrf
                     <input type="hidden" name="pricing_hash" value="{{ $cart->pricing_hash }}"><input type="hidden" name="checkout_idempotency_key" value="{{ $checkoutKey }}">
-                    @foreach([['first_name','First name',true],['last_name','Last name',true],['email','Email address',true],['phone','Phone (optional)',false],['address_line_1','Address line 1',true],['address_line_2','Address line 2 (optional)',false],['city','Town or city',true],['county','County (optional)',false],['postcode','Postcode',true]] as [$name,$label,$required])<label class="block {{ in_array($name,['email','address_line_1','address_line_2'])?'sm:col-span-2':'' }}"><span class="text-sm font-bold">{{ $label }}</span><input name="{{ $name }}" value="{{ old($name, $name === 'email' ? auth()->user()?->email : null) }}" @required($required) class="mt-2 w-full rounded-xl border border-rose/30 bg-cream px-4 py-3"></label>@endforeach
-                    <input type="hidden" name="country" value="GB"><p class="text-sm text-muted sm:col-span-2">Delivery country: United Kingdom</p>
-                    <fieldset class="sm:col-span-2">
+                    @if($usingSavedDetails)<p class="mb-4 text-sm text-muted">Using your saved details.</p>@endif
+                    <x-customer-details-form :values="$values" :lookup-url="route('address-lookup')" :show-save-default-checkbox="$showSaveDefaultCheckbox"
+                        :autocomplete-url="route('address-autocomplete')"
+                        :autocomplete-resolve-url-template="route('address-autocomplete.resolve', ['placeId' => '__PLACE_ID__'])" />
+                    <p class="mt-4 text-sm text-muted">Delivery country: United Kingdom</p>
+                    <fieldset class="mt-8">
                         <legend class="font-display text-xl">Delivery method</legend>
                         @if($checkoutBlocked)
                             <div class="mt-4 rounded-2xl bg-rose/20 p-4 text-sm text-red-800" role="alert">These products do not share a delivery method yet. Please order products from different fulfilment providers separately.</div>

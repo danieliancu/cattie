@@ -1,13 +1,31 @@
-| Ordine | Etapă                           | Ce facem                                                                                                                                                                   |
-| -----: | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|  **1** | 💳 **Stripe REAL**              | Plată reală cu cardul, Stripe Checkout/Payment, webhook success/failure, comanda devine `Paid`. Produsele și prețurile rămân în Cattie, nu le duplicăm manual în Stripe.   |
-|  **2** | 👤 **Customer Account**         | Înregistrare simplă cu **email + parolă**, login/logout, cont client. Deocamdată fără complicații suplimentare de securitate; hardening-ul îl facem înainte de production. |
-|  **3** | 📦 **Order history în cont**    | Clientul vede comenzile lui, numărul comenzii, produsele, totalul și statusul. Aș include asta direct în etapa contului — altfel contul nu are mare valoare.               |
-|  ** ** |    **Save character**           | |
-|  **4** | 🆘 **Order Support**            | În header apare **`Order Support`**, roșu și subliniat. Duce la o pagină dedicată pentru probleme cu comenzile.                                                            |
-|  **5** | ✉️ **Emailuri**                 | Confirmare comandă, confirmare plată, apoi ulterior shipped + tracking.                                                                                                    |
-|  **6** | 🖨️ **PrintAsset finalisation**  | PNG-ul print-ready există deja; îl formalizăm ca `PrintAsset`, checksum, validare și legare definitivă de comandă.                                                         |
-|  **7** | 🏭 **TreatPod REAL**            | Abia aici terminăm relația cu tipografia: SKU + adresă + artwork → comandă TreatPod.                                                                                       |
-|  **8** | 🚚 **Fulfilment / tracking**    | Webhook-urile TreatPod actualizează producția, expedierea, courier-ul și tracking-ul.                                                                                      |
-|  **9** | 🔐 **Production hardening**     | Securitate conturi, password reset/email verification dacă vrem, rate limiting, GDPR final, retention, backup, monitoring, queue alerts, deploy production.                |
-| **10** | ✅ **Final QA**                 | Flux complet real: creare cont → produs → AI → plată → tipar → expediere → suport client.                                                                                  |
+| Ordine | Etapă                    | Status                                    |
+| -----: | ------------------------ | ----------------------------------------- |
+|  **1** | 💳 Stripe                | 🟡 **Cod gata → test sandbox/live setup** |
+|  **2** | 👤 Customer Account      | ✅ **DONE**                                |
+|  **3** | 📦 Order History         | ✅ **DONE**                                |
+|  **4** | 🆘 Order Support         | ⏭️ **NEXT**                               |
+|  **5** | ✉️ Emails                | ⬜                                         |
+|  **6** | 🖨️ PrintAsset            | 🟡 model existent / pipeline lipsă        |
+|  **7** | 🏭 TreatPod outbound     | ⬜ așteptăm contractul API complet         |
+|  **8** | 🚚 Fulfilment / Tracking | 🟡 webhook receiver existent              |
+|  **9** | 🔐 Production hardening  | ⬜ + unele fundații deja existente         |
+| **10** | ✅ Final QA              | ⬜                                         |
+
+
+
+
+POST-MVP / UX refinement
+
+My Characters
+→ stabilim scenariul final
+→ simplificăm UI-ul
+→ păstrăm doar ce ajută repeat purchase
+
+
+Cattie VAT registered?
+↓
+NO → nu colectăm VAT separat
+YES → prețuri B2C VAT-inclusive + contabilizare corectă
+
+
+

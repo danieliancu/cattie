@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $title ?? 'Cattie.uk — Personalised gifts made magical' }}</title>
+    <title>{{ $title ?? 'Kattie.uk — Personalised gifts made magical' }}</title>
     <meta name="description" content="{{ $description ?? 'Turn a favourite photo into heartfelt personalised artwork and gifts.' }}">
     @isset($robots)<meta name="robots" content="{{ $robots }}">@endisset
     @unless(($robots ?? null) === 'noindex,nofollow')<link rel="canonical" href="{{ $canonical ?? url()->current() }}">@endunless
@@ -16,8 +16,8 @@
 <a href="#main-content" class="skip-link">Skip to content</a>
 <header class="sticky top-0 z-40 border-b border-rose/20 bg-cream/95 backdrop-blur" x-data="{mobileMenu:false,mobileAccountOpen:false,desktopAccountOpen:false,searchOpen:false,searchQuery:@js((string) request('q', '')),searchProducts:@js($searchProducts),filteredProducts(){const query=this.searchQuery.trim().toLowerCase();return query===''?this.searchProducts:this.searchProducts.filter(product=>product.name.toLowerCase().includes(query))}}">
     <div class="shell py-4 lg:grid lg:grid-cols-[auto_minmax(240px,1fr)_auto] lg:items-center lg:gap-8">
-        <div class="flex items-center justify-between">
-            <a href="{{ route('home') }}" class="brand relative ml-8 inline-flex lg:ml-0" aria-label="Cattie.uk home"><i data-lucide="cat" stroke-width="1.25" class="absolute -left-11 top-[calc(50%+3px)] h-9 w-9 -translate-y-1/2 text-coral" aria-hidden="true"></i>Cattie<span>.</span>uk<span class="absolute left-0 top-[calc(100%-6px)] whitespace-nowrap pl-[2px] font-sans text-[8px] font-light tracking-[2px] text-muted">PRINTED IN THE UK</span></a>
+        <div class="flex items-center justify-between pl-[50px]">
+            <a href="{{ route('home') }}" class="brand relative ml-8 inline-flex lg:ml-0" aria-label="Kattie.uk home"><img src="{{ asset('images/icon.gif') }}" class="absolute -left-20 -bottom-5 z-[1] h-auto w-[85px] lg:-bottom-[25px]" alt="" aria-hidden="true">Kattie<span>.</span>uk<span class="absolute left-0 top-[calc(100%-6px)] whitespace-nowrap pl-[5px] font-sans text-[8px] font-light tracking-[0.8px] text-muted">LITTLE FACES. BIG LOVE</span></a>
             <div class="flex items-center gap-4 lg:hidden">
                 <div class="relative" @click.outside="mobileAccountOpen=false">
                     <button type="button" class="cursor-pointer rounded-full p-1 {{ request()->routeIs('account.*') ? 'text-coral' : 'text-ink' }}" @click="mobileAccountOpen=!mobileAccountOpen" :aria-expanded="mobileAccountOpen" aria-label="My Account"><i data-lucide="user-round" class="h-5 w-5" aria-hidden="true"></i></button>
@@ -89,7 +89,7 @@
 <footer class="mt-24 border-t border-rose/20 bg-cream/95">
     <div class="shell grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-[2.2fr_1fr_1fr_1fr] lg:gap-10">
         <div class="lg:pr-12 xl:pr-20">
-            <div class="brand relative ml-11 inline-flex">Cattie<span>.</span>uk<i data-lucide="cat" stroke-width="1.25" class="absolute -left-11 top-[calc(50%+3px)] h-9 w-9 -translate-y-1/2 text-coral" aria-hidden="true"></i><span class="absolute left-0 top-[calc(100%-6px)] whitespace-nowrap pl-[2px] font-sans text-[8px] font-light tracking-[2px] text-muted">PRINTED IN THE UK</span></div>
+            <div class="brand relative ml-11 inline-flex">Kattie<span>.</span>uk<img src="{{ asset('images/icon.gif') }}" class="absolute h-auto w-[65px]" style="left:-60px;bottom:-5px;" alt="" aria-hidden="true"><span class="absolute left-0 top-[calc(100%-6px)] whitespace-nowrap pl-[5px] font-sans text-[8px] font-light tracking-[0.8px] text-muted">LITTLE FACES. BIG LOVE</span></div>
             <p class="mt-5 max-w-md text-sm leading-6 text-muted">Thoughtful personalised gifts, created from the photographs and little moments you already treasure.</p>
             <p class="mt-7 max-w-md text-sm leading-6 text-ink">Get unique gift ideas and so much more delivered right to your inbox.</p>
             <form class="mt-4 flex max-w-md gap-2" @submit.prevent>
@@ -100,7 +100,7 @@
         </div>
         <div>
             <h2 class="text-xs font-bold uppercase tracking-[.16em] text-ink">About Us</h2>
-            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted"><li>About Cattie</li><li>Contact us</li><li><a class="hover:text-coral" href="{{ route('information.terms') }}">Terms and Conditions</a></li><li>Blog</li><li><a class="hover:text-coral" href="{{ route('sitemap') }}">Sitemap</a></li></ul>
+            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted"><li>About Kattie</li><li>Contact us</li><li><a class="hover:text-coral" href="{{ route('information.terms') }}">Terms and Conditions</a></li><li>Blog</li><li><a class="hover:text-coral" href="{{ route('sitemap') }}">Sitemap</a></li></ul>
         </div>
         <div>
             <h2 class="text-xs font-bold uppercase tracking-[.16em] text-ink">Customer Service</h2>
@@ -108,14 +108,14 @@
         </div>
         <div>
             <h2 class="text-xs font-bold uppercase tracking-[.16em] text-ink">Contact Us</h2>
-            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted"><li>Messenger</li><li>WhatsApp</li><li>Email:support@cattie.uk</li><li>24/7 Customer Support</li></ul>
+            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted"><li>Messenger</li><li>WhatsApp</li><li>Email:support@kattie.uk</li><li>24/7 Customer Support</li></ul>
         </div>
     </div>
     <div class="border-t border-rose/20">
         <div class="shell flex flex-col items-center justify-center gap-3 py-4 text-[10px] text-muted sm:flex-row sm:gap-12 sm:text-xs lg:gap-20">
             <span class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap"><svg viewBox="0 0 60 30" class="h-3.5 w-7" role="img" aria-label="United Kingdom flag"><clipPath id="uk-flag-clip"><rect width="60" height="30" rx="1"/></clipPath><g clip-path="url(#uk-flag-clip)"><path fill="#012169" d="M0 0h60v30H0z"/><path stroke="#fff" stroke-width="6" d="m0 0 60 30m0-30L0 30"/><path stroke="#C8102E" stroke-width="2" d="m0 0 60 30m0-30L0 30"/><path stroke="#fff" stroke-width="10" d="M30 0v30M0 15h60"/><path stroke="#C8102E" stroke-width="6" d="M30 0v30M0 15h60"/></g></svg> United Kingdom</span>
             <a class="shrink-0 whitespace-nowrap hover:text-coral" href="{{ route('information.cookies') }}">Manage Cookies</a>
-            <span class="shrink-0 whitespace-nowrap">Copyright © 2026, CATTIE All Rights Reserved</span>
+            <span class="shrink-0 whitespace-nowrap">Copyright © 2026, KATTIE All Rights Reserved</span>
         </div>
     </div>
 </footer>

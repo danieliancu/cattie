@@ -1,4 +1,4 @@
-<x-layouts.storefront title="Cattie.uk — Turn favourite photos into magical gifts" description="Turn a favourite family or pet photo into personalised artwork and a meaningful gift.">
+<x-layouts.storefront title="Kattie.uk — Turn favourite photos into magical gifts" description="Turn a favourite family or pet photo into personalised artwork and a meaningful gift.">
     <section class="home-hero relative overflow-hidden bg-cream bg-cover bg-[68%_center] bg-no-repeat" style="background-image: url('{{ asset('images/hero.png') }}')">
         <div class="absolute inset-0 bg-gradient-to-r from-cream/95 via-cream/55 to-transparent lg:via-transparent"></div>
         <div class="shell relative flex min-h-[650px] items-center py-16">

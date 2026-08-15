@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\UkPostcode;
 use Illuminate\Foundation\Http\FormRequest;
 
 class CheckoutRequest extends FormRequest
@@ -19,7 +20,7 @@ class CheckoutRequest extends FormRequest
             'email' => strtolower((string) $clean($this->email)), 'phone' => $clean($this->phone),
             'address_line_1' => $clean($this->address_line_1), 'address_line_2' => $clean($this->address_line_2),
             'city' => $clean($this->city), 'county' => $clean($this->county),
-            'postcode' => strtoupper(str_replace(' ', '', (string) $clean($this->postcode))), 'country' => 'GB',
+            'postcode' => UkPostcode::normalizeForInput($this->postcode), 'country' => 'GB',
         ]);
     }
 
@@ -32,7 +33,8 @@ class CheckoutRequest extends FormRequest
             'email' => ['required', 'email:rfc', 'max:254'], 'phone' => ['nullable', 'string', 'max:30'],
             'address_line_1' => ['required', 'string', 'max:150'], 'address_line_2' => ['nullable', 'string', 'max:150'],
             'city' => ['required', 'string', 'max:100'], 'county' => ['nullable', 'string', 'max:100'],
-            'postcode' => ['required', 'regex:/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/'], 'country' => ['required', 'in:GB'],
+            'postcode' => ['required', 'regex:'.UkPostcode::FORMAT_REGEX], 'country' => ['required', 'in:GB'],
+            'save_default_address' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -44,7 +46,7 @@ class CheckoutRequest extends FormRequest
             'first_name' => $data['first_name'], 'last_name' => $data['last_name'],
             'address_line_1' => $data['address_line_1'], 'address_line_2' => $data['address_line_2'] ?? null,
             'city' => $data['city'], 'county' => $data['county'] ?? null,
-            'postcode' => preg_replace('/^(.*)(\d[A-Z]{2})$/', '$1 $2', $data['postcode']), 'country' => 'GB',
+            'postcode' => UkPostcode::format($data['postcode']), 'country' => 'GB',
         ]];
     }
 }

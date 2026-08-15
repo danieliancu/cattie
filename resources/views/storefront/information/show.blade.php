@@ -1,4 +1,4 @@
-<x-layouts.storefront :title="$content['title'].' | Cattie.uk'" :description="$content['description']" :canonical="url()->current()">
+<x-layouts.storefront :title="$content['title'].' | Kattie.uk'" :description="$content['description']" :canonical="url()->current()">
     <section class="shell py-14 sm:py-20">
         <div class="mx-auto max-w-3xl">
             <h1 class="font-display text-4xl sm:text-5xl">{{ $content['title'] }}</h1>

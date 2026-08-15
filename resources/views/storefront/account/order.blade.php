@@ -1,4 +1,4 @@
-<x-layouts.storefront :title="$order->number.' | My Orders | Cattie.uk'" description="Your Cattie order details.">
+<x-layouts.storefront :title="$order->number.' | My Orders | Kattie.uk'" description="Your Kattie order details.">
 <section class="shell py-12 sm:py-20"><div class="mx-auto max-w-5xl"><p class="eyebrow">My Account</p><h1 class="mt-3 font-display text-5xl">Order {{ $order->number }}</h1><p class="mt-4 text-muted">{{ ($order->placed_at ?? $order->created_at)->format('j F Y') }} · {{ $order->status->customerLabel() }}</p>@include('storefront.account._nav')
 <div class="mt-10 grid items-start gap-7 lg:grid-cols-[1fr_20rem]">
     <div class="rounded-[2rem] bg-white p-7 sm:p-9"><h2 class="font-display text-3xl">Items</h2>

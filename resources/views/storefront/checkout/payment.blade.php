@@ -1,4 +1,4 @@
-<x-layouts.storefront :title="'Payment for '.$order->number.' | Cattie.uk'" description="Review the final total for your Cattie.uk order.">
+<x-layouts.storefront :title="'Payment for '.$order->number.' | Kattie.uk'" description="Review the final total for your Kattie.uk order.">
 <section class="shell py-12 sm:py-20">
     <div class="mx-auto max-w-6xl">
         <p class="eyebrow">Order {{ $order->number }}</p>

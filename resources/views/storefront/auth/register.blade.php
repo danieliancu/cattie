@@ -1,4 +1,4 @@
-<x-layouts.storefront title="Create your account | Cattie.uk" description="Create a Cattie account to keep track of your orders.">
+<x-layouts.storefront title="Create your account | Kattie.uk" description="Create a Kattie account to keep track of your orders.">
 <section class="shell py-12 sm:py-20"><div class="mx-auto max-w-md">
     <p class="eyebrow">My Account</p><h1 class="mt-3 font-display text-5xl">Create your account</h1>
     <form method="POST" action="{{ route('register.store') }}" class="mt-10 space-y-5 rounded-[2rem] bg-white p-7 sm:p-9">@csrf

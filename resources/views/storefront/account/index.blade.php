@@ -1,4 +1,4 @@
-<x-layouts.storefront title="My Account | Cattie.uk" description="See your Cattie orders.">
+<x-layouts.storefront title="My Account | Kattie.uk" description="See your Kattie orders.">
 <section class="shell py-12 sm:py-20"><div class="mx-auto max-w-5xl">
     <p class="eyebrow">My Account</p><h1 class="mt-3 font-display text-5xl">Hello</h1><p class="mt-4 text-muted">{{ auth()->user()->email }}</p>
     @include('storefront.account._nav')

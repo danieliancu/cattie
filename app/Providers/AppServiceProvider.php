@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\AddressLookupProvider;
 use App\Contracts\BackgroundRemovalRunner;
 use App\Contracts\ImageGenerationProvider;
 use App\Contracts\PaymentProvider;
@@ -14,6 +15,9 @@ use App\Models\FulfilmentProductMapping;
 use App\Models\Product;
 use App\Observers\FulfilmentProductMappingObserver;
 use App\Observers\ProductObserver;
+use App\Providers\AddressLookup\GooglePlacesAddressLookupProvider;
+use App\Providers\AddressLookup\HomedataAddressLookupProvider;
+use App\Providers\AddressLookup\PostcodesIoAddressLookupProvider;
 use App\Providers\ImageGeneration\FakeImageGenerationProvider;
 use App\Providers\ImageGeneration\OpenAiImageGenerationProvider;
 use App\Providers\Payments\FakePaymentProvider;
@@ -47,6 +51,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(ShippingResolver::class, OrderShippingMethodResolver::class);
         $this->app->bind(TaxResolver::class, fn () => match (config('payments.tax.strategy')) {
             'zero_uk' => new ZeroUkTaxResolver, default => throw new RuntimeException('Unsupported tax strategy.')
+        });
+        $this->app->bind(AddressLookupProvider::class, fn () => match (config('address_lookup.provider')) {
+            'postcodes_io' => new PostcodesIoAddressLookupProvider,
+            'homedata' => new HomedataAddressLookupProvider,
+            'google_places' => new GooglePlacesAddressLookupProvider,
+            default => throw new RuntimeException('Unsupported address lookup provider.'),
         });
     }
 

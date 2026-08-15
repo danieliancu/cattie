@@ -6,7 +6,9 @@ use App\Domain\Artwork\Actions\RecordAnalyticsEvent;
 use App\Domain\Cart\Actions\CreateOrderFromCart;
 use App\Domain\Cart\Actions\AbandonCartCheckout;
 use App\Domain\Cart\Actions\RefreshCartPrices;
+use App\Domain\Cart\Actions\ResolveCheckoutContactPrefill;
 use App\Domain\Cart\Actions\ResolveGuestCart;
+use App\Domain\Customer\Actions\UpdateCustomerProfile;
 use App\Domain\Payments\Actions\ResolveOrderTotals;
 use App\Domain\Payments\Actions\ResolveEligibleShippingMethods;
 use App\Domain\Payments\Actions\StartPayment;
@@ -22,6 +24,7 @@ use App\Models\Payment;
 use App\Models\ShippingMethod;
 use App\Providers\Payments\StripePaymentProvider;
 use App\Support\GuestContext;
+use App\Support\ShippingAddressComparator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,7 +33,7 @@ use Illuminate\View\View;
 
 class CheckoutController extends Controller
 {
-    public function show(Request $request, ResolveGuestCart $resolve, RefreshCartPrices $prices, RecordAnalyticsEvent $analytics, ResolveEligibleShippingMethods $shippingMethods): View|RedirectResponse
+    public function show(Request $request, ResolveGuestCart $resolve, RefreshCartPrices $prices, RecordAnalyticsEvent $analytics, ResolveEligibleShippingMethods $shippingMethods, ResolveCheckoutContactPrefill $prefill): View|RedirectResponse
     {
         [$cart] = $resolve->handle($request, false);
         if (! $cart || ! $cart->items()->exists()) {
@@ -67,10 +70,18 @@ class CheckoutController extends Controller
         $analytics->handle('checkout_started', $cart);
         $checkoutKey = (string) Str::uuid();
 
-        return view('storefront.checkout.show', compact('cart', 'checkoutKey', 'availableShippingMethods', 'selectedShippingMethodId', 'checkoutBlocked'));
+        $values = $prefill->handle($request, $cart);
+        $profile = $request->user()?->customerProfile;
+        $showSaveDefaultCheckbox = (bool) $request->user() && ! ShippingAddressComparator::matches([
+            'address_line_1' => $values['address_line_1'], 'address_line_2' => $values['address_line_2'],
+            'city' => $values['city'], 'county' => $values['county'], 'postcode' => $values['postcode'],
+        ], $profile?->default_shipping_address);
+        $usingSavedDetails = (bool) ($request->user() && $profile && ! $cart->convertedOrder && ! $request->session()->hasOldInput());
+
+        return view('storefront.checkout.show', compact('cart', 'checkoutKey', 'availableShippingMethods', 'selectedShippingMethodId', 'checkoutBlocked', 'values', 'showSaveDefaultCheckbox', 'usingSavedDetails'));
     }
 
-    public function store(CheckoutRequest $request, ResolveGuestCart $resolve, CreateOrderFromCart $create, GuestContext $guest, AbandonCartCheckout $abandonCheckout): RedirectResponse
+    public function store(CheckoutRequest $request, ResolveGuestCart $resolve, CreateOrderFromCart $create, GuestContext $guest, AbandonCartCheckout $abandonCheckout, UpdateCustomerProfile $updateProfile): RedirectResponse
     {
         [$cart] = $resolve->handle($request, false);
         if (! $cart && $guest->token($request)) {
@@ -93,6 +104,14 @@ class CheckoutController extends Controller
             }
         }
         $order = $create->handle($cart, $request->validated('pricing_hash'), $customer, $request->validated('checkout_idempotency_key'), $request->validated('shipping_method_id'));
+
+        if ($request->user() && $request->boolean('save_default_address')) {
+            $address = $customer['shipping_address'];
+            $updateProfile->handle($request->user(), [
+                'address_line_1' => $address['address_line_1'], 'address_line_2' => $address['address_line_2'],
+                'city' => $address['city'], 'county' => $address['county'], 'postcode' => $address['postcode'],
+            ]);
+        }
 
         return redirect()->route('checkout.payment', $order->number);
     }

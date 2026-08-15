@@ -1,4 +1,4 @@
-<x-layouts.storefront :title="$category->meta_title ?: $category->name.' | Personalised Gifts | Cattie.uk'" :description="$category->meta_description ?: $category->short_description" :canonical="$canonical">
+<x-layouts.storefront :title="$category->meta_title ?: $category->name.' | Personalised Gifts | Kattie.uk'" :description="$category->meta_description ?: $category->short_description" :canonical="$canonical">
     <nav class="shell pt-10 text-sm text-muted" aria-label="Breadcrumb"><ol class="flex flex-wrap items-center gap-2"><li><a class="hover:text-coral" href="{{ route('home') }}">Home</a></li><li aria-hidden="true">→</li><li><a class="hover:text-coral" href="{{ route('products.index') }}">Shop</a></li><li aria-hidden="true">→</li><li aria-current="page">{{ $category->name }}</li></ol></nav>
     <section class="shell py-12 sm:py-16">
         <div class="hidden max-w-3xl sm:block"><p class="eyebrow">Personalised gifts</p><h1 class="mt-4 font-display text-5xl sm:text-6xl">{{ $category->name }}</h1>@if($category->short_description)<p class="mt-6 text-lg leading-8 text-muted">{{ $category->short_description }}</p>@endif</div>
