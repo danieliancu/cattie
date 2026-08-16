@@ -11,7 +11,7 @@ return [
                         'role' => 'primary',
                         'variant_options' => ['colour' => 'white'],
                         'public' => ['disk' => 'public', 'storage_key' => 'products/cattie-water-bottle/catalogue/bottle01.jpg'],
-                        'alt_text' => 'White 650 ml Cattie water bottle with colourful wraparound artwork and lid beside it',
+                        'alt_text' => 'White 650 ml Kattie water bottle with colourful wraparound artwork and lid beside it',
                         'sort_order' => 0,
                     ],
                     'product-02' => [
@@ -19,7 +19,7 @@ return [
                         'role' => 'gallery',
                         'variant_options' => ['colour' => 'navy'],
                         'public' => ['disk' => 'public', 'storage_key' => 'products/cattie-water-bottle/catalogue/bottle02.jpg'],
-                        'alt_text' => 'Navy 650 ml Cattie water bottle with copper-coloured character artwork',
+                        'alt_text' => 'Navy 650 ml Kattie water bottle with copper-coloured character artwork',
                         'sort_order' => 1,
                     ],
                     'close-up' => [
@@ -27,7 +27,7 @@ return [
                         'role' => 'detail',
                         'variant_options' => ['colour' => 'white'],
                         'public' => ['disk' => 'public', 'storage_key' => 'products/cattie-water-bottle/catalogue/close-up.jpg'],
-                        'alt_text' => 'Close-up of the printed artwork finish on the white Cattie water bottle',
+                        'alt_text' => 'Close-up of the printed artwork finish on the white Kattie water bottle',
                         'sort_order' => 2,
                     ],
                     'lid' => [
@@ -35,7 +35,7 @@ return [
                         'role' => 'detail',
                         'variant_options' => ['colour' => 'white'],
                         'public' => ['disk' => 'public', 'storage_key' => 'products/cattie-water-bottle/catalogue/lid.jpg'],
-                        'alt_text' => 'Close-up of the stainless-steel carry lid on the white Cattie water bottle',
+                        'alt_text' => 'Close-up of the stainless-steel carry lid on the white Kattie water bottle',
                         'sort_order' => 3,
                     ],
                     'blank' => [

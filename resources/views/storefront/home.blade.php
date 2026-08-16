@@ -5,8 +5,29 @@
             <div class="relative z-10"><p class="eyebrow">Made from a moment you love</p><h1 class="mt-5 max-w-xl font-display text-5xl leading-[1.02] sm:text-6xl lg:text-7xl">Turn their favourite photo into <em class="text-coral not-italic">something magical.</em></h1><p class="mt-7 max-w-lg text-lg leading-8 text-muted">We transform your photograph into beautiful personalised artwork, then make it into a gift they’ll want to keep close.</p><a href="{{ route('products.index') }}" class="button-primary mt-9">Shop personalised gifts <span aria-hidden="true">→</span></a><p class="mt-5 text-sm text-muted">See your artwork before you order.</p></div>
         </div>
     </section>
-    <section id="how-it-works" class="shell py-24"><div class="section-heading"><p class="eyebrow">Simple from start to finish</p><h2>One photo. Four little steps.</h2></div><ol class="mt-12 grid gap-6 md:grid-cols-4">@foreach([['01','Choose your gift','Pick the piece that feels right.'],['02','Upload a photo','A clear, favourite moment works best.'],['03','See your artwork','Choose the version that makes you smile.'],['04','Approve & order','We only make it once you love it.']] as [$number,$heading,$copy])<li class="rounded-3xl bg-white p-7 shadow-sm ring-1 ring-ink/5"><span class="font-display text-3xl text-coral">{{ $number }}</span><h3 class="mt-8 font-display text-xl">{{ $heading }}</h3><p class="mt-2 text-sm leading-6 text-muted">{{ $copy }}</p></li>@endforeach</ol></section>
+    <section id="how-it-works" class="w-full max-w-full px-4 py-24 sm:px-6 lg:px-10">
+        <div class="section-heading"><p class="eyebrow">Simple from start to finish</p><h2>One photo. Four little steps.</h2></div>
+        <ol class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            @foreach([
+                ['01', '01.png', 'Choose your gift', 'Pick a product that makes them smile.'],
+                ['02', '02.png', 'Upload a photo', 'Add a clear, front-facing photo we can work our magic from.'],
+                ['03', '03.png', 'See your artwork', 'Your real photo becomes a story cartoon. Review your storybook character preview.'],
+                ['04', '04.png', 'Approve & order', 'Happiness is on the way! Approve your artwork, place your order, and we’ll take care of the rest.'],
+            ] as [$number, $image, $heading, $copy])
+            <li class="flex flex-col overflow-hidden rounded-3xl border border-ink/5 bg-white p-7 shadow-sm sm:p-8">
+                <div class="flex items-baseline gap-3">
+                    <span class="font-display text-3xl text-coral">{{ $number }}</span>
+                    <h3 class="font-display text-xl">{{ $heading }}</h3>
+                </div>
+                <div class="mt-5 flex flex-1 items-center gap-5">
+                    <p class="w-1/3 shrink-0 text-sm leading-6 text-muted">{{ $copy }}</p>
+                    <img src="{{ asset('images/how/'.$image) }}" alt="Step {{ $number }}: {{ $heading }}" class="h-40 w-2/3 rounded-2xl object-cover">
+                </div>
+            </li>
+            @endforeach
+        </ol>
+    </section>
     <section class="bg-white/70 py-24"><div class="shell"><div class="section-heading flex-row items-end justify-between text-left"><div><p class="eyebrow">Made personal</p><h2>Gifts with a story inside.</h2></div><a href="{{ route('products.index') }}" class="hidden font-bold text-coral md:block">See all gifts →</a></div><div class="mt-12 grid grid-cols-2 gap-4 sm:gap-8 lg:grid-cols-4">@foreach($featuredProducts as $product)<x-product-card :product="$product" />@endforeach</div></div></section>
-    <section class="shell py-24"><div class="section-heading"><p class="eyebrow">Choose the feeling</p><h2>Two ways to tell their story.</h2><p>Each style is created to keep the person—or pet—you love at the heart of the picture.</p></div><div class="mx-auto mt-12 grid max-w-4xl gap-6 md:grid-cols-2">@foreach($artworkStyles as $style)<article class="relative overflow-hidden rounded-[2rem] p-9 {{ $style->slug === 'storybook-cartoon' ? 'bg-sky/45' : 'bg-sand' }}"><div class="mb-16 h-3 w-16 rounded-full {{ $style->slug === 'storybook-cartoon' ? 'bg-coral' : 'bg-sage' }}"></div><h3 class="font-display text-3xl">{{ $style->slug === 'storybook-cartoon' ? 'Cartoon' : $style->name }}</h3><p class="mt-3 leading-7 text-muted">{{ $style->description }}</p></article>@endforeach</div></section>
+    <section class="shell py-24"><div class="section-heading"><p class="eyebrow">Choose the feeling</p><h2>Two ways to tell their story.</h2><p>Each style is created to keep the person—or pet—you love at the heart of the picture.</p></div><div class="mx-auto mt-12 grid max-w-4xl gap-6 md:grid-cols-2">@foreach($artworkStyles as $style)<article class="relative flex items-center gap-4 overflow-hidden rounded-[2rem] p-9 {{ $style->slug === 'storybook-cartoon' ? 'bg-sky/45' : 'bg-sand' }}"><div class="min-w-0 flex-1"><div class="mb-8 h-3 w-16 rounded-full {{ $style->slug === 'storybook-cartoon' ? 'bg-coral' : 'bg-sage' }}"></div><h3 class="font-display text-3xl">{{ $style->slug === 'storybook-cartoon' ? 'Cartoon' : $style->name }}</h3><p class="mt-3 leading-7 text-muted">{{ $style->description }}</p></div>@if(in_array($style->slug, ['storybook-cartoon', 'hand-drawn']))<img src="{{ asset('images/artwork-styles/'.$style->slug.'.png') }}" alt="{{ $style->slug === 'storybook-cartoon' ? 'Cartoon' : $style->name }} artwork style example" class="h-auto w-[200px] shrink-0 object-contain mix-blend-multiply">@endif</article>@endforeach</div></section>
     <section class="shell"><div class="rounded-[2.5rem] bg-ink px-8 py-14 text-center text-white sm:px-16"><p class="eyebrow text-rose">Thoughtfully made</p><h2 class="mt-4 font-display text-4xl">Your memory stays the main character.</h2><p class="mx-auto mt-5 max-w-2xl leading-7 text-white/70">You choose the photo, style and final artwork. Nothing goes to print until you’ve seen and approved it.</p></div></section>
 </x-layouts.storefront>

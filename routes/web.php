@@ -12,6 +12,8 @@ use App\Http\Controllers\Storefront\HomeController;
 use App\Http\Controllers\Storefront\InformationPageController;
 use App\Http\Controllers\Storefront\ProductCategoryController;
 use App\Http\Controllers\Storefront\ProductController;
+use App\Http\Controllers\Storefront\OrderSupportController;
+use App\Http\Controllers\Admin\OrderSupportPhotoController;
 use App\Http\Controllers\Storefront\ProductPreviewController;
 use App\Http\Controllers\Storefront\SitemapController;
 use Illuminate\Support\Facades\Route;
@@ -76,3 +78,7 @@ Route::post('/checkout/{orderNumber}/payment/stripe-session', [CheckoutControlle
 Route::post('/checkout/{orderNumber}/payment/stripe-status', [CheckoutController::class, 'stripeStatus'])->middleware('throttle:60,1')->name('checkout.stripe-status');
 Route::get('/checkout/{orderNumber}/payment/stripe-return', [CheckoutController::class, 'stripeReturn'])->name('checkout.stripe-return');
 Route::get('/orders/{orderNumber}/confirmation', [CheckoutController::class, 'confirmation'])->name('orders.confirmation');
+Route::get('/order-support', [OrderSupportController::class, 'create'])->name('order-support.create');
+Route::post('/order-support', [OrderSupportController::class, 'store'])->middleware('throttle:10,60')->name('order-support.store');
+Route::get('/order-support/submitted', [OrderSupportController::class, 'submitted'])->name('order-support.submitted');
+Route::get('/admin/order-support/{orderSupportRequest}/photo', [OrderSupportPhotoController::class, 'show'])->middleware('auth')->name('admin.order-support.photo');

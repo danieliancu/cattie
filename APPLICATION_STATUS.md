@@ -1,14 +1,14 @@
-# Cattie.uk — raport tehnic viu al aplicației
+# Kattie.uk — raport tehnic viu al aplicației
 
 > **Statutul documentului:** sursa vie de adevăr pentru starea tehnică și funcțională a aplicației.
 >
 > **Regulă de întreținere:** acest fișier trebuie actualizat la fiecare modificare care schimbă funcționalitatea, arhitectura, schema de date, configurarea, interfața, asseturile, integrările, testele sau limitările cunoscute. O schimbare nu este considerată documentată complet până când secțiunile afectate și jurnalul de la final reflectă noua stare.
 >
-> **Ultima actualizare:** 15 august 2026.
+> **Ultima actualizare:** 15 august 2026 (Order Support — Phase 4).
 
 ## 1. Rezumat executiv
 
-Cattie.uk este o aplicație e-commerce pentru produse personalizate. Clientul alege produsul, varianta și stilul artistic, încarcă o fotografie, primește un personaj generat cu AI, îl poziționează într-un design de produs, aprobă rezultatul, îl adaugă în basket și finalizează checkout-ul.
+Kattie.uk (rebranding din Cattie.uk) este o aplicație e-commerce pentru produse personalizate. Clientul alege produsul, varianta și stilul artistic, încarcă o fotografie, primește un personaj generat cu AI, îl poziționează într-un design de produs, aprobă rezultatul, îl adaugă în basket și finalizează checkout-ul.
 
 Aplicația include în prezent:
 
@@ -161,7 +161,7 @@ Catalogul seed-uit include produse demo și produse cu integrare/template real:
 - Little Moments Mug;
 - Cuddle Close Cushion;
 - Best Friend Pet Portrait;
-- Cattie Water Bottle, 650 ml;
+- Kattie Water Bottle, 650 ml (placeholder inactiv);
 - Water Bottle with Red Flip Lid, 750 ml;
 - Small Plastic Lunchbox;
 - Personalised Stationery & Pencil Tin.
@@ -353,7 +353,7 @@ Exemplu: `2185 × 898 px / 300 PPI = aproximativ 185 × 76 mm`.
 - taxa folosește în continuare strategia `zero_uk`;
 - protecție prin pricing hash și idempotency key;
 - providerii implementați sunt `fake` și `stripe`, selectați prin `PAYMENT_PROVIDER`;
-- Stripe Embedded Checkout este montat în pagina Cattie și primește line items dinamice din snapshot-urile `OrderItem`; nu există Stripe Products, Prices sau sincronizare de catalog;
+- Stripe Embedded Checkout este montat în pagina Kattie și primește line items dinamice din snapshot-urile `OrderItem`; nu există Stripe Products, Prices sau sincronizare de catalog;
 - suma produselor, shipping-ului și taxei este verificată împotriva `Order.total_minor`, iar reducerile nenule sunt respinse în această versiune;
 - crearea Checkout Session păstrează Payment `Pending` și Order `AwaitingPayment`; succesul este stabilit numai prin reconciliere server-side;
 - aceeași acțiune idempotentă reconciliază webhook-ul semnat și return-ul browserului, validând IDs, numărul comenzii, suma și moneda;
@@ -401,6 +401,22 @@ Exemplu: `2185 × 898 px / 300 PPI = aproximativ 185 × 76 mm`.
 ### Stări de comandă
 
 Sunt modelate stările de la draft și artwork până la paid, print asset, fulfilment, production, shipping, delivery, failure, cancellation și refund. Tranzițiile sunt auditate prin `OrderStatusTransition`.
+
+### Order Support (Phase 4)
+
+Flux simplu prin care un client (autentificat sau guest) semnalează o problemă cu o comandă; nu automatizează nimic — este exclusiv o cerere de revizuire umană.
+
+- pagină publică `GET /order-support` (`order-support.create`), accesibilă și fără cont; formular `POST /order-support` (`order-support.store`, `throttle:10,60`); confirmare `GET /order-support/submitted` (`order-support.submitted`) — nu conține referința în URL, este citită dintr-un flash de sesiune, ca să nu poată fi ghicită/reîncărcată pentru resubmit;
+- clienți autentificați: selector de comenzi populat exclusiv din `Order.user_id === auth()->id()`; parametrul `?order=` este doar o comoditate de preselecție, reverificat server-side față de comenzile proprii — o comandă a altui cont este ignorată silențios, nu expusă și nu eronată explicit; fără comenzi → mesaj prietenos, fără selector gol;
+- clienți guest: câmpuri `order_number` + `email`; ownership dovedit prin `GuestContext` (același cookie/hash folosit la checkout) SAU prin potrivirea normalizată (lowercase/trim) a emailului cu `Order.email`; comandă inexistentă, email greșit sau ambele produc exact același mesaj generic — „We couldn't match those order details. Please check your order number and email address.” — fără nicio diferență de comportament care ar permite enumerarea comenzilor;
+- domeniu nou, complet separat de comenzi: tabelul `order_support_requests` (ULID), model `App\Models\OrderSupportRequest` (`belongsTo Order`, `belongsTo User` nullable), enum propriu `App\Enums\OrderSupportStatus` (`open|reviewing|resolved|closed`, implicit `open`) — necuplat de `OrderStatus`; schimbarea statusului de suport nu modifică niciodată `Order`;
+- câmpuri: `reference` (unic, format `SUP-XXXXXX`, generat de `App\Domain\Orders\Actions\CreateOrderSupportRequest`), `contact_email` (cast `encrypted` — snapshot, nu se scrie niciodată înapoi în `Order.email`/`CustomerProfile`/`User.email`), `message` (text simplu, escapat la afișare, fără HTML), `status`, plus `photo_disk`/`photo_storage_key`/`photo_mime_type`/`photo_size_bytes` (toate nullable — poza e opțională);
+- poza: validare conținut real (`getimagesizefromstring`, aceeași convenție ca upload-ul de artwork), JPEG/PNG/WebP, maximum 10 MB, cheie de stocare aleatorie (`order-support/{id}/photo.{ext}`) pe disk-ul privat `local` — niciodată numele fișierului clientului, niciodată disk public; dacă stocarea fișierului eșuează, cererea de suport NU este creată (fără rând orfan cu poză lipsă);
+- acțiunea `CreateOrderSupportRequest` este singura care scrie în `order_support_requests`; nu atinge niciodată `Order`, `Payment`, `PrintAsset`, `FulfilmentSubmission` sau artwork — trimiterea unui suport nu anulează, nu rambursează, nu creează înlocuire și nu regenerează artwork;
+- vizibilitate: CTA `Get help with this order` pe `/account/orders/{orderNumber}`, link discret `Need help with this order? → Order Support` pe pagina de confirmare comandă (prefill automat al numărului comenzii pentru guest, via `GuestContext`), link `Order Support` roșu/subliniat în header (desktop + mobil) și în footer, sub Customer Service;
+- admin Filament: resursă `Order Support` (`app/Filament/Resources/OrderSupportRequests`), grup de navigare „Customer Support”; listă cu referință, comandă, status (badge colorat), email de contact, dată; pagina de editare arată referința/comanda/emailul/mesajul (toate needitabile) și permite doar schimbarea statusului `Open → Reviewing → Resolved/Closed`; poza este accesibilă printr-o rută privată dedicată (`GET /admin/order-support/{orderSupportRequest}/photo`, `auth` + verificare `is_admin` în controller), niciodată direct în HTML;
+- analytics: evenimente `order_support_opened`/`order_support_submitted` prin `RecordAnalyticsEvent`, subiect = `Order`, fără mesaj/email/cale poză în `properties`;
+- limitări explicite ale acestei faze: nu există email de confirmare/notificare (Phase 5), nu există înlocuire automată de comandă, nicio acțiune TreatPod, niciun istoric de suport în contul clientului (`My Account`) — CTA-ul de pe pagina comenzii este singurul punct de intrare; toate cererile necesită revizuire manuală de admin.
 
 ## 10. Fulfilment și integrări
 
@@ -451,7 +467,7 @@ Modelele acoperă:
 - catalog: Product, ProductVariant, ProductImage, ProductCategory, ArtworkStyle, personalisation fields;
 - template-uri: ProductDesignTemplate, DesignTemplateVersion, assignments;
 - artwork: ArtworkSession, Upload/UploadAsset, Generation/GenerationAsset, ComposedDesign;
-- commerce: User, CustomerProfile, Cart/CartItem, Order/OrderItem, Payment și ShippingMethod;
+- commerce: User, CustomerProfile, Cart/CartItem, Order/OrderItem, Payment, ShippingMethod și OrderSupportRequest;
 - producție: PrintAsset, FulfilmentProductMapping, FulfilmentSubmission, Shipment;
 - observabilitate: AnalyticsEvent, AdminAuditLog, WebhookEvent, OrderStatusTransition;
 - platformă: User, slug redirects.
@@ -469,6 +485,7 @@ Snapshot-urile de personalizare și artwork sunt păstrate pe entitățile tranz
 - purge șterge uploaduri, generation assets, PNG/WebP și editor backgrounds;
 - retenția implicită pentru artwork este 30 de zile.
 - preview-urile din istoricul comenzilor sunt servite privat numai proprietarului autentificat al Order-ului.
+- pozele Order Support sunt stocate privat sub `storage/app/private/order-support/{id}/photo.{ext}`, cu cheie aleatorie (nu numele fișierului clientului); accesul se face exclusiv prin ruta admin autentificată/verificată `is_admin`, niciodată direct în HTML.
 
 ## 13. Securitate și robustețe
 
@@ -499,6 +516,7 @@ Panoul este disponibil sub `/admin` și include:
 - Fulfilment Product Mappings;
 - Shipping Methods, cu provider, service code, preț, estimare în zile lucrătoare, țară, status și ordine;
 - Admin Audit Logs;
+- Order Support (grup „Customer Support”) — listă/detaliu cereri de suport, schimbare status, acces securizat la poza atașată;
 - dashboard și Catalogue Overview;
 - preview protejat al produsului;
 - publicare cu readiness checks;
@@ -507,7 +525,7 @@ Panoul este disponibil sub `/admin` și include:
 
 ## 15. Rute și suprafețe publice
 
-Aplicația are 72 de rute non-vendor (69 anterior + 3 noi în această fază). Grupurile principale:
+Aplicația are 76 de rute non-vendor (72 anterior + 4 noi în această fază: `order-support.create`, `order-support.store`, `order-support.submitted`, `admin.order-support.photo`). Grupurile principale:
 
 - home, products, categories, related content și sitemap;
 - artwork start/show/upload/status/assets/original/regenerate/cancel;
@@ -517,13 +535,14 @@ Aplicația are 72 de rute non-vendor (69 anterior + 3 noi în această fază). G
 - checkout, payment, Stripe embedded session/status, Stripe return și confirmation;
 - register, login/logout, account overview, order history/detail și artwork privat per OrderItem;
 - account details (My Details, `GET`/`PATCH /account/details`) și lookup de adresă UK (`GET /address-lookup`);
+- Order Support: pagina publică, submit, confirmare și fotografia privată din admin;
 - pagini FAQ, delivery, returns, privacy, terms, payments și cookies;
 - webhook-uri Stripe și TreatPod;
 - resurse admin Filament.
 
 ## 16. Testare și starea verificărilor
 
-Repository-ul conține 33 de fișiere de test Feature, grupate în:
+Repository-ul conține 35 de fișiere de test Feature, grupate în:
 
 - Admin;
 - Artwork;
@@ -546,14 +565,17 @@ Acoperirea verifică, între altele:
 - catalogue, mappings și idempotent seeding;
 - Prodigi client și TreatPod webhooks.
 - Stripe Checkout payload, idempotency, redirect/cancel, return race, semnătură, deduplicare, stări async, protecție cross-order și refund.
+- Order Support: navigare/branding, ownership autentificat (fără preselecție cross-user, fără acceptare de order_number manipulat), verificare guest (GuestContext sau email, mesaj generic identic la orice eșec, fără enumerare), persistență (referință unică, status implicit Open, email snapshot, mesaj text simplu), poză (JPEG/PNG/WebP acceptate, tip/dimensiune invalidă respinsă, cheie de stocare aleatorie, acces cross-request blocat), admin (acces restricționat la is_admin, listare, inspecție, tranziții de status fără impact pe OrderStatus) și regresie (nicio mutație de totaluri/adresă/status/payment/print-asset/fulfilment la trimiterea unui suport).
 
 Verificări recente trecute:
+
+- `tests/Feature/Commerce/OrderSupportTest.php` + `tests/Feature/Admin/OrderSupportAdminTest.php`: 42 teste, 92 assertions;
 
 - testele Stripe, payment și cart: 19 teste, 172 assertions;
 - build Vite production pentru Embedded Checkout;
 - teste noi pentru My Details/checkout prefill/lookup de adresă: `CustomerProfileTest` (16 teste, 65 assertions), `CheckoutPrefillTest` (12 teste, 45 assertions), `AddressLookupTest` (7 teste, 32 assertions), plus 2 teste noi de regresie în `CartCheckoutTest`;
 - suita `tests/Feature/Commerce` completă după această fază: 70 teste trecute, 452 assertions;
-- suita completă curentă: 198 teste trecute și 6 eșecuri preexistente/nelegate de Customer Account/Checkout (artwork regeneration lineage și assertions de markup ale workspace-ului/catalogului);
+- suita completă curentă (incl. Order Support, Phase 4): 251 teste trecute, 1729 assertions, și aceleași 6 eșecuri preexistente/nelegate (artwork regeneration lineage și assertions de markup ale workspace-ului/catalogului/paginării categoriilor), verificate individual că nu s-au schimbat față de starea dinaintea acestei faze;
 
 - PNG 300 PPI, `pHYs`, alpha și dimensiuni fizice;
 - Pencil Tin final și preview la schimbarea variantei;
@@ -621,6 +643,9 @@ php artisan prodigi:quote <SKU>
 9. Nu există carte de adrese/adrese salvate multiple, etichete (Home/Work), adresă de facturare separată sau CRUD de adrese — `CustomerProfile` are o singură adresă de livrare implicită per client.
 10. `Postcodes.io` (providerul implicit din `.env.example`) nu întoarce o listă de adrese la nivel de proprietate. Pentru dropdown real de adrese este disponibil `HomedataAddressLookupProvider` (`ADDRESS_LOOKUP_PROVIDER=homedata`), cu tier gratuit de 100 apeluri/lună fără card; peste acest volum, sau pentru date suplimentare (ex. county), e nevoie de un cont plătit Homedata sau de comutarea către alt provider (Ideal Postcodes, getAddress.io) prin aceeași variabilă.
 11. Schimbarea emailului din My Details nu declanșează verificare de email (consistent cu punctul 8).
+12. Order Support nu trimite niciun email (confirmare client sau notificare admin) — Phase 5 va adăuga arhitectura de email; câmpurile `contact_email`/`reference`/relația cu `Order`/`status` sunt deja pregătite pentru asta.
+13. Order Support nu creează automat o comandă de înlocuire, nu rambursează și nu declanșează nicio acțiune TreatPod — orice rezultat rămâne o decizie de admin/om.
+14. Nu există istoric de Order Support în `My Account` (deliberat, scop redus pentru această fază) — singurul punct de acces pentru client este CTA-ul de pe detaliul comenzii/confirmare/nav.
 
 ## 19. Protocol obligatoriu de actualizare
 
@@ -662,7 +687,7 @@ Documentul trebuie să descrie codul care există efectiv. Funcțiile planificat
 
 ### 14 august 2026 — Stripe Embedded Checkout
 
-- înlocuit redirectul către Stripe-hosted page cu formularul Embedded Checkout montat în pagina Cattie;
+- înlocuit redirectul către Stripe-hosted page cu formularul Embedded Checkout montat în pagina Kattie;
 - adăugate cheia publică Stripe, endpointurile guest-protected pentru session/status și reutilizarea sesiunilor Pending deschise;
 - păstrate Dynamic Payment Methods, return-ul pentru autorizări externe, webhook-ul și reconcilierea idempotentă;
 - `client_secret` rămâne tranzitoriu și nu este salvat în metadata sau loguri;
@@ -748,3 +773,16 @@ Documentul trebuie să descrie codul care există efectiv. Funcțiile planificat
 - providerul primește la `suggest()` doar textul introdus de client (fără nume/email/telefon/date comandă); niciun eșec al Google Places nu produce 500 — răspunsul e mereu `{"suggestions":[]}` sau `{"resolved":false}`, cu introducere manuală mereu disponibilă;
 - constatare importantă: nici Postcodes.io, nici Google Places nu pot întoarce „toate adresele de la un cod poștal" — Postcodes.io validează doar, iar Google Places rezolvă un cod poștal la nivel de zonă, nu de proprietăți individuale; `HomedataAddressLookupProvider` (cu cheie server corectă, tip `prefix.secret`) rămâne singura opțiune pentru acel flux specific, dacă va fi nevoie ulterior;
 - teste noi: `AddressAutocompleteTest` (6 teste); suita `tests/Feature/Commerce` completă: 81 teste trecute, 476 assertions; suita completă a aplicației: 209 teste trecute, aceleași 6 eșecuri preexistente nelegate de această schimbare.
+
+### 15 august 2026 — Order Support (Phase 4)
+
+- adăugat fluxul complet de suport pentru comenzi: pagină publică `GET /order-support`, formular `POST /order-support` (`throttle:10,60`), confirmare `GET /order-support/submitted` (referință citită din flash de sesiune, nu din URL — fără resubmit la refresh, fără reference ghicibil);
+- domeniu nou: migrarea `2026_08_15_000200_create_order_support_requests_table`, modelul `App\Models\OrderSupportRequest` (ULID, `belongsTo Order`/`User` nullable), enum `App\Enums\OrderSupportStatus` (`Open|Reviewing|Resolved|Closed`, implementează `HasColor`/`HasLabel` pentru Filament), acțiunea tranzacțională `App\Domain\Orders\Actions\CreateOrderSupportRequest` (generează referința unică `SUP-XXXXXX`, stochează poza cu cleanup la eșec, înregistrează analytics) — nu scrie niciodată în `Order`/`Payment`/`PrintAsset`/`FulfilmentSubmission`;
+- ownership: autentificat → strict `Order.user_id === auth()->id()` (parametrul `?order=` e doar preselecție, reverificată server-side, ignorată silențios dacă nu aparține userului); guest → `GuestContext` (același cookie ca la checkout) SAU email normalizat identic cu `Order.email`; orice combinație greșită (comandă inexistentă, email greșit, ambele) produce exact același mesaj generic, fără enumerare;
+- poza este opțională, validată pe conținut real (JPEG/PNG/WebP, max 10 MB), stocată cu cheie aleatorie pe disk-ul privat `local` sub `order-support/{id}/photo.{ext}` — niciodată numele fișierului clientului, niciodată disk public; accesibilă doar prin ruta admin `GET /admin/order-support/{orderSupportRequest}/photo` (`auth` + verificare `is_admin`);
+- resursă Filament nouă `OrderSupportRequestResource` (grup „Customer Support”): listă cu referință/comandă/status/email/dată, pagină de editare needitabilă în afară de `status`, acțiune „View photo” către ruta privată; nicio resursă Order nouă în Filament (nu exista una anterior — în loc de asta, un rezumat citit din relația `order` este afișat direct în formular);
+- puncte de intrare: CTA „Get help with this order” pe `/account/orders/{orderNumber}`, link discret pe pagina de confirmare comandă (prefill automat pentru guest via `GuestContext`), link „Order Support” în header (desktop + mobil, cu dropdown propriu care conține și „Track Order”/„Something wrong?”) și în footer;
+- fără email-uri (Phase 5), fără înlocuire automată de comandă, fără acțiune TreatPod — cererea rămâne exclusiv de revizuire umană;
+- teste noi: `tests/Feature/Commerce/OrderSupportTest.php` + `tests/Feature/Admin/OrderSupportAdminTest.php` (42 teste, 92 assertions); adăugat `database/factories/OrderFactory.php` (nu exista anterior) pentru a reduce duplicarea fixture-urilor de test; suita completă a aplicației: 251 teste trecute, 1729 assertions, aceleași 6 eșecuri preexistente nelegate (verificate individual că sunt identice cu cele dinaintea acestei faze);
+- curățare de brand: corectate mențiunile rămase „Cattie”/„Cattie.uk” în copy real customer-facing și documentație — `config/information-pages.php` (inclusiv adresele `support@cattie.uk` → `support@kattie.uk`), `config/commercial-policies.php`, `config/product-assets.php` (alt text), `database/seeders/CatalogueSeeder.php` (nume/descrieri/meta produse și categorii), `README.md`; nu au fost redenumite identificatori de cod/date istorice (`GuestContext::COOKIE = 'cattie_guest_token'`, prefixul `CAT-` al numărului de comandă, numele fișierului de test `CattieAdminV1Test.php`) — riscul de renaming depășea beneficiul pentru această fază;
+- modificări de design cerute ulterior în aceeași fază: token-ul `--color-coral` schimbat la `#fc5997`; dropdown-uri hover pe desktop pentru Shop (categorii active cu produse), Order Support (Track Order + Something wrong?) și My Account (My Orders/My Details/Sign out, click pe etichetă navighează direct la `/account`), cu închidere reciprocă (un singur dropdown deschis la un moment dat) și echivalent pe mobil; secțiunea „How it works” de pe homepage rescrisă cu imaginile reale din `public/images/how/{01..04}.png`, lățime completă de ecran, layout număr+titlu sus / text+imagine jos; secțiunea „Choose the feeling” de pe homepage afișează acum imaginile reale ale stilurilor de artwork; crescute timeout-urile Google Places (`GOOGLE_PLACES_TIMEOUT=10`, `GOOGLE_PLACES_CONNECT_TIMEOUT=6`) după erori intermitente de conexiune observate în logs.

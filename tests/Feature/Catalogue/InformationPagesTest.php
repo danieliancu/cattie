@@ -10,7 +10,7 @@ class InformationPagesTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_information_pages_render_consistent_cattie_content(): void
+    public function test_information_pages_render_consistent_kattie_content(): void
     {
         $pages = [
             'information.terms' => ['Terms and Conditions', 'Changes and cancellations'],
@@ -24,7 +24,7 @@ class InformationPagesTest extends TestCase
 
         foreach ($pages as $route => [$title, $heading]) {
             $this->get(route($route))->assertOk()->assertSee($title, false)->assertSee($heading)
-                ->assertSee('support@cattie.uk')->assertDontSee('Callie')->assertDontSee('TreatPod')
+                ->assertSee('support@kattie.uk')->assertDontSee('Callie')->assertDontSee('TreatPod')
                 ->assertDontSee('support-uk@callie.com')->assertDontSee('99 Day');
         }
     }

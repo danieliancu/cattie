@@ -4,11 +4,12 @@ namespace App\Models;
 
 use App\Enums\OrderStatus;
 use App\Models\Concerns\UsesUlids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
-    use UsesUlids;
+    use HasFactory, UsesUlids;
 
     protected $guarded = [];
 
@@ -42,5 +43,10 @@ class Order extends Model
     public function transitions()
     {
         return $this->hasMany(OrderStatusTransition::class);
+    }
+
+    public function supportRequests()
+    {
+        return $this->hasMany(OrderSupportRequest::class);
     }
 }

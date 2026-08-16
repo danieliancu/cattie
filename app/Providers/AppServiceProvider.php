@@ -13,6 +13,7 @@ use App\Domain\Payments\Resolvers\OrderShippingMethodResolver;
 use App\Domain\Payments\Resolvers\ZeroUkTaxResolver;
 use App\Models\FulfilmentProductMapping;
 use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Observers\FulfilmentProductMappingObserver;
 use App\Observers\ProductObserver;
 use App\Providers\AddressLookup\GooglePlacesAddressLookupProvider;
@@ -74,6 +75,9 @@ class AppServiceProvider extends ServiceProvider
                 'searchProducts' => Product::query()->active()->ordered()->get(['name', 'slug'])
                     ->map(fn (Product $product) => ['name' => $product->name, 'url' => route('products.show', $product->slug)])
                     ->values(),
+                'navCategories' => ProductCategory::query()->active()
+                    ->whereHas('products', fn ($query) => $query->active())
+                    ->ordered()->get(['name', 'slug']),
             ]);
         });
     }

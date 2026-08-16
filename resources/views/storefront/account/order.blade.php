@@ -1,5 +1,5 @@
 <x-layouts.storefront :title="$order->number.' | My Orders | Kattie.uk'" description="Your Kattie order details.">
-<section class="shell py-12 sm:py-20"><div class="mx-auto max-w-5xl"><p class="eyebrow">My Account</p><h1 class="mt-3 font-display text-5xl">Order {{ $order->number }}</h1><p class="mt-4 text-muted">{{ ($order->placed_at ?? $order->created_at)->format('j F Y') }} · {{ $order->status->customerLabel() }}</p>@include('storefront.account._nav')
+<section class="shell py-12 sm:py-20"><div class="mx-auto max-w-5xl"><p class="eyebrow">My Account</p><h1 class="mt-3 font-display text-5xl">Order {{ $order->number }}</h1><p class="mt-4 flex flex-wrap items-center gap-2 text-muted">{{ ($order->placed_at ?? $order->created_at)->format('j F Y') }} · <x-order-status-pill :status="$order->status" /></p>@include('storefront.account._nav')
 <div class="mt-10 grid items-start gap-7 lg:grid-cols-[1fr_20rem]">
     <div class="rounded-[2rem] bg-white p-7 sm:p-9"><h2 class="font-display text-3xl">Items</h2>
         @foreach($order->items as $item)<article class="mt-6 grid grid-cols-[5rem_1fr] gap-4 border-t border-rose/20 pt-6 sm:grid-cols-[6rem_1fr_auto]">
@@ -13,5 +13,7 @@
     <aside class="rounded-[2rem] bg-white p-7"><h2 class="font-display text-2xl">Order summary</h2><dl class="mt-5 space-y-3"><div class="flex justify-between"><dt>Subtotal</dt><dd>£{{ number_format($order->subtotal_minor / 100, 2) }}</dd></div><div class="flex justify-between gap-4"><dt>{{ data_get($order->shipping_method_snapshot, 'name', 'Delivery') }}</dt><dd>£{{ number_format(($order->shipping_minor ?? 0) / 100, 2) }}</dd></div>@if(($order->tax_minor ?? 0) > 0)<div class="flex justify-between"><dt>Tax</dt><dd>£{{ number_format($order->tax_minor / 100, 2) }}</dd></div>@endif<div class="flex justify-between border-t border-rose/20 pt-4 text-xl font-bold"><dt>Total</dt><dd>£{{ number_format(($order->total_minor ?? 0) / 100, 2) }}</dd></div></dl>
         @php($address = $order->shipping_address)<h2 class="mt-8 font-display text-2xl">Delivery address</h2><address class="mt-4 text-sm not-italic leading-6">{{ $address['first_name'] }} {{ $address['last_name'] }}<br>{{ $address['address_line_1'] }}@if($address['address_line_2'] ?? null)<br>{{ $address['address_line_2'] }}@endif<br>{{ $address['city'] }}@if($address['county'] ?? null), {{ $address['county'] }}@endif<br>{{ $address['postcode'] }}</address>
     </aside>
-</div></div></section>
+</div>
+<div class="mt-7 rounded-[2rem] bg-white p-7"><h2 class="font-display text-xl">Need help with this order?</h2><p class="mt-2 text-sm text-muted">Tell us what happened and we'll make it right.</p><a class="button-primary mt-4 inline-flex" href="{{ route('order-support.create', ['order' => $order->number]) }}">Get help with this order</a></div>
+</div></section>
 </x-layouts.storefront>

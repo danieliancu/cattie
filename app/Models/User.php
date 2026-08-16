@@ -70,4 +70,9 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->hasOne(CustomerProfile::class);
     }
+
+    public function supportRequests()
+    {
+        return $this->hasMany(OrderSupportRequest::class);
+    }
 }

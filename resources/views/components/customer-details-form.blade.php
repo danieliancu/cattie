@@ -25,13 +25,18 @@
             const response = await fetch(url, {headers: {'Accept': 'application/json'}});
             const data = await response.json();
             if (! data.resolved) return;
-            root.querySelector('[name=address_line_1]').value = data.address_line_1 ?? '';
-            root.querySelector('[name=address_line_2]').value = data.address_line_2 ?? '';
-            root.querySelector('[name=city]').value = data.city ?? '';
-            root.querySelector('[name=county]').value = data.county ?? '';
-            if (data.postcode) this.postcode = data.postcode;
-            root.querySelector('[name=address_line_1]').dispatchEvent(new Event('blur'));
-            root.querySelector('[name=city]').dispatchEvent(new Event('blur'));
+            const fields = {
+                address_line_1: data.address_line_1 ?? '',
+                address_line_2: data.address_line_2 ?? '',
+                city: data.city ?? '',
+                county: data.county ?? '',
+            };
+            root.querySelector('[name=address_line_1]').value = fields.address_line_1;
+            root.querySelector('[name=address_line_2]').value = fields.address_line_2;
+            root.querySelector('[name=city]').value = fields.city;
+            root.querySelector('[name=county]').value = fields.county;
+            if (data.postcode) { this.postcode = data.postcode; fields.postcode = data.postcode; }
+            this.$dispatch('customer-details-fields-changed', {fields});
         } catch (e) {}
     },
 }" x-ref="root">

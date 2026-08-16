@@ -1,4 +1,4 @@
-# Cattie.uk
+# Kattie.uk
 
 Current architecture, implemented functionality, operational status and known gaps are maintained in [APPLICATION_STATUS.md](APPLICATION_STATUS.md). Update that living report whenever the application changes.
 
@@ -49,7 +49,7 @@ For failure recovery, set `AI_IMAGE_FAKE_FAILURE=true`, clear config and restart
 
 ## Stripe Checkout (test mode)
 
-Stripe Checkout uses Cattie's order snapshots and creates dynamic line items. It does not require Stripe Products or Prices.
+Stripe Checkout uses Kattie's order snapshots and creates dynamic line items. It does not require Stripe Products or Prices.
 
 ```env
 PAYMENT_PROVIDER=stripe
@@ -72,7 +72,7 @@ stripe listen --forward-to http://127.0.0.1:8000/api/webhooks/stripe
 
 Copy the `whsec_...` value printed by the CLI into `STRIPE_WEBHOOK_SECRET`. Complete a sandbox purchase with Stripe's standard successful test card `4242 4242 4242 4242`, any future expiry date and any CVC. The browser return and signed webhook both use the same idempotent reconciliation path; an order is confirmed only after Stripe reports it paid.
 
-The Stripe payment form is embedded directly in the Cattie payment page. Dynamic Payment Methods are controlled in the Stripe Dashboard; methods that require bank authorization can temporarily redirect the customer and return through Cattie. Do not commit Stripe secrets. The `pk_...` key is intentionally browser-visible, while `sk_...` and `whsec_...` must remain server-side. Cattie remains authoritative for products, prices, shipping, tax and order totals; non-zero discounts are intentionally rejected until a Stripe discount strategy is implemented.
+The Stripe payment form is embedded directly in the Kattie payment page. Dynamic Payment Methods are controlled in the Stripe Dashboard; methods that require bank authorization can temporarily redirect the customer and return through Kattie. Do not commit Stripe secrets. The `pk_...` key is intentionally browser-visible, while `sk_...` and `whsec_...` must remain server-side. Kattie remains authoritative for products, prices, shipping, tax and order totals; non-zero discounts are intentionally rejected until a Stripe discount strategy is implemented.
 
 ---
 

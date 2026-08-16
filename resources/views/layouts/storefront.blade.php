@@ -14,7 +14,7 @@
 </head>
 <body class="overflow-x-clip bg-white text-ink antialiased">
 <a href="#main-content" class="skip-link">Skip to content</a>
-<header class="sticky top-0 z-40 border-b border-rose/20 bg-cream/95 backdrop-blur" x-data="{mobileMenu:false,mobileAccountOpen:false,desktopAccountOpen:false,searchOpen:false,searchQuery:@js((string) request('q', '')),searchProducts:@js($searchProducts),filteredProducts(){const query=this.searchQuery.trim().toLowerCase();return query===''?this.searchProducts:this.searchProducts.filter(product=>product.name.toLowerCase().includes(query))}}">
+<header class="sticky top-0 z-40 border-b border-rose/20 bg-cream/95 backdrop-blur" x-data="{mobileMenu:false,mobileAccountOpen:false,mobileOpenMenu:null,desktopOpenMenu:null,searchOpen:false,searchQuery:@js((string) request('q', '')),searchProducts:@js($searchProducts),filteredProducts(){const query=this.searchQuery.trim().toLowerCase();return query===''?this.searchProducts:this.searchProducts.filter(product=>product.name.toLowerCase().includes(query))}}">
     <div class="shell py-4 lg:grid lg:grid-cols-[auto_minmax(240px,1fr)_auto] lg:items-center lg:gap-8">
         <div class="flex items-center justify-between pl-[50px]">
             <a href="{{ route('home') }}" class="brand relative ml-8 inline-flex lg:ml-0" aria-label="Kattie.uk home"><img src="{{ asset('images/icon.gif') }}" class="absolute -left-20 -bottom-5 z-[1] h-auto w-[85px] lg:-bottom-[25px]" alt="" aria-hidden="true">Kattie<span>.</span>uk<span class="absolute left-0 top-[calc(100%-6px)] whitespace-nowrap pl-[5px] font-sans text-[8px] font-light tracking-[0.8px] text-muted">LITTLE FACES. BIG LOVE</span></a>
@@ -42,23 +42,48 @@
         </form>
 
         <nav aria-label="Main navigation" class="hidden items-center gap-6 whitespace-nowrap text-sm font-semibold lg:flex">
-            <a class="nav-link {{ request()->routeIs('products.*') ? 'text-coral' : '' }}" href="{{ route('products.index') }}">Shop</a>
+            <div class="relative" @click.outside="desktopOpenMenu=null">
+                <a class="nav-link inline-flex cursor-pointer items-center gap-1 {{ request()->routeIs('products.*', 'categories.*') ? 'text-coral' : '' }}" href="{{ route('products.index') }}" @mouseenter="desktopOpenMenu='shop'"><span>Shop</span><i data-lucide="chevron-down" class="h-3.5 w-3.5 cursor-pointer" aria-hidden="true" @click.prevent="desktopOpenMenu = desktopOpenMenu==='shop' ? null : 'shop'"></i></a>
+                <div x-show="desktopOpenMenu==='shop'" x-cloak @mouseleave="desktopOpenMenu=null" class="absolute left-0 top-full z-50 mt-3 w-56 rounded-2xl border border-rose/25 bg-white p-2 shadow-2xl">
+                    @foreach($navCategories as $category)<a href="{{ route('categories.show', $category->slug) }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">{{ $category->name }}</a>@endforeach
+                    @if($navCategories->isEmpty())<a href="{{ route('products.index') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">All products</a>@endif
+                </div>
+            </div>
             <a class="nav-link" href="{{ route('home') }}#how-it-works">How it works</a>
-            <a class="nav-link" href="#">Track Order</a>
-            <div class="relative" @click.outside="desktopAccountOpen=false">
-                <button type="button" class="nav-link inline-flex cursor-pointer items-center gap-1 {{ request()->routeIs('account.*') ? 'text-coral' : '' }}" @click="desktopAccountOpen=!desktopAccountOpen" :aria-expanded="desktopAccountOpen">@auth My Account @else Sign in @endauth</button>
-                <div x-show="desktopAccountOpen" x-cloak class="absolute right-0 top-full z-50 mt-3 w-48 rounded-2xl border border-rose/25 bg-white p-2 shadow-2xl">
-                    @auth<a href="{{ route('account.index') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">My Account</a><a href="{{ route('account.orders.index') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">My Orders</a><form method="POST" action="{{ route('logout', [], false) }}">@csrf<button type="submit" class="block w-full rounded-xl px-4 py-3 text-left hover:bg-blush/40 hover:text-coral">Sign out</button></form>
+            <div class="relative" @click.outside="desktopOpenMenu=null">
+                <a class="inline-flex cursor-pointer items-center gap-1 font-bold text-coral underline underline-offset-4 hover:text-ink" href="{{ route('order-support.create') }}" @mouseenter="desktopOpenMenu='order-support'"><span>Order Support</span><i data-lucide="chevron-down" class="h-3.5 w-3.5 cursor-pointer" aria-hidden="true" @click.prevent="desktopOpenMenu = desktopOpenMenu==='order-support' ? null : 'order-support'"></i></a>
+                <div x-show="desktopOpenMenu==='order-support'" x-cloak @mouseleave="desktopOpenMenu=null" class="absolute left-0 top-full z-50 mt-3 w-48 rounded-2xl border border-rose/25 bg-white p-2 shadow-2xl">
+                    <a href="#" class="block rounded-xl px-4 py-3 text-ink hover:bg-blush/40 hover:text-coral">Track Order</a><a href="{{ route('order-support.create') }}" class="block rounded-xl px-4 py-3 text-ink hover:bg-blush/40 hover:text-coral">Something wrong?</a>
+                </div>
+            </div>
+            <div class="relative" @click.outside="desktopOpenMenu=null">
+                <a class="nav-link inline-flex cursor-pointer items-center gap-1.5 {{ request()->routeIs('account.*') ? 'text-coral' : '' }}" href="@auth{{ route('account.index') }}@else{{ route('login') }}@endauth" @mouseenter="desktopOpenMenu='account'"><i data-lucide="user-round" class="h-4 w-4" aria-hidden="true"></i><span>@auth My Account @else Sign in @endauth</span><i data-lucide="chevron-down" class="h-3.5 w-3.5 cursor-pointer" aria-hidden="true" @click.prevent="desktopOpenMenu = desktopOpenMenu==='account' ? null : 'account'"></i></a>
+                <div x-show="desktopOpenMenu==='account'" x-cloak @mouseleave="desktopOpenMenu=null" class="absolute left-0 top-full z-50 mt-3 w-48 rounded-2xl border border-rose/25 bg-white p-2 shadow-2xl">
+                    @auth<a href="{{ route('account.orders.index') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">My Orders</a><a href="{{ route('account.details') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">My Details</a><form method="POST" action="{{ route('logout', [], false) }}">@csrf<button type="submit" class="block w-full rounded-xl px-4 py-3 text-left hover:bg-blush/40 hover:text-coral">Sign out</button></form>
                     @else<a href="{{ route('login') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">Sign in</a><a href="{{ route('register') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">Create an account</a>@endauth
                 </div>
             </div>
-            <a class="nav-link inline-flex items-center gap-2 {{ request()->routeIs('cart.*') ? 'text-coral' : '' }}" href="{{ route('cart.index') }}">Basket @if($basketItemCount > 0)<span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-coral px-1 text-[11px] font-bold leading-none text-white" aria-label="{{ $basketItemCount }} items in basket">{{ $basketItemCount }}</span>@endif</a>
+            <a class="nav-link inline-flex items-center gap-2 {{ request()->routeIs('cart.*') ? 'text-coral' : '' }}" href="{{ route('cart.index') }}"><i data-lucide="shopping-cart" class="h-4 w-4" aria-hidden="true"></i>Basket @if($basketItemCount > 0)<span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-coral px-1 text-[11px] font-bold leading-none text-white" aria-label="{{ $basketItemCount }} items in basket">{{ $basketItemCount }}</span>@endif</a>
         </nav>
 
         <nav id="mobile-navigation" x-show="mobileMenu" x-cloak aria-label="Mobile navigation" class="mt-4 border-t border-rose/20 pt-3 text-sm font-semibold lg:hidden">
-            <a class="nav-link block" href="{{ route('products.index') }}">Shop</a>
+            <div class="flex items-center justify-between">
+                <a class="nav-link block flex-1" href="{{ route('products.index') }}">Shop</a>
+                <button type="button" class="p-2" @click="mobileOpenMenu = mobileOpenMenu==='shop' ? null : 'shop'" :aria-expanded="mobileOpenMenu==='shop'" aria-controls="mobile-shop-categories" aria-label="Toggle shop categories"><i data-lucide="chevron-down" class="h-4 w-4 transition" :class="mobileOpenMenu==='shop' ? 'rotate-180' : ''" aria-hidden="true"></i></button>
+            </div>
+            <div id="mobile-shop-categories" x-show="mobileOpenMenu==='shop'" x-cloak class="ml-3 border-l border-rose/20 pl-3">
+                @foreach($navCategories as $category)<a href="{{ route('categories.show', $category->slug) }}" class="nav-link block text-sm font-normal">{{ $category->name }}</a>@endforeach
+                @if($navCategories->isEmpty())<a href="{{ route('products.index') }}" class="nav-link block text-sm font-normal">All products</a>@endif
+            </div>
             <a class="nav-link block" href="{{ route('home') }}#how-it-works">How it works</a>
-            <a class="nav-link block" href="#">Track Order</a>
+            <div class="flex items-center justify-between">
+                <a class="block flex-1 py-2 font-bold text-coral underline underline-offset-4" href="{{ route('order-support.create') }}">Order Support</a>
+                <button type="button" class="p-2 text-coral" @click="mobileOpenMenu = mobileOpenMenu==='order-support' ? null : 'order-support'" :aria-expanded="mobileOpenMenu==='order-support'" aria-controls="mobile-order-support-links" aria-label="Toggle order support links"><i data-lucide="chevron-down" class="h-4 w-4 transition" :class="mobileOpenMenu==='order-support' ? 'rotate-180' : ''" aria-hidden="true"></i></button>
+            </div>
+            <div id="mobile-order-support-links" x-show="mobileOpenMenu==='order-support'" x-cloak class="ml-3 border-l border-rose/20 pl-3">
+                <a class="nav-link block text-sm font-normal" href="#">Track Order</a>
+                <a class="nav-link block text-sm font-normal" href="{{ route('order-support.create') }}">Something wrong?</a>
+            </div>
         </nav>
     </div>
 </header>
@@ -104,7 +129,7 @@
         </div>
         <div>
             <h2 class="text-xs font-bold uppercase tracking-[.16em] text-ink">Customer Service</h2>
-            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted"><li><a class="hover:text-coral" href="{{ route('information.faq') }}">FAQ</a></li><li><a class="hover:text-coral" href="{{ route('information.delivery') }}">Delivery &amp; Shipping</a></li><li><a class="hover:text-coral" href="{{ route('information.returns') }}">Returns Policy</a></li><li><a class="hover:text-coral" href="{{ route('information.privacy') }}">Privacy Policy</a></li><li><a class="hover:text-coral" href="{{ route('information.payments') }}">Payment Methods</a></li></ul>
+            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted"><li><a class="hover:text-coral" href="{{ route('information.faq') }}">FAQ</a></li><li><a class="hover:text-coral" href="{{ route('information.delivery') }}">Delivery &amp; Shipping</a></li><li><a class="hover:text-coral" href="{{ route('information.returns') }}">Returns Policy</a></li><li><a class="hover:text-coral" href="{{ route('information.privacy') }}">Privacy Policy</a></li><li><a class="hover:text-coral" href="{{ route('information.payments') }}">Payment Methods</a></li><li><a class="hover:text-coral" href="{{ route('order-support.create') }}">Order Support</a></li></ul>
         </div>
         <div>
             <h2 class="text-xs font-bold uppercase tracking-[.16em] text-ink">Contact Us</h2>
