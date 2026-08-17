@@ -15,7 +15,9 @@ use App\Models\FulfilmentProductMapping;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Observers\FulfilmentProductMappingObserver;
+use App\Observers\ProductCategoryObserver;
 use App\Observers\ProductObserver;
+use App\Support\CatalogueNavigation;
 use App\Providers\AddressLookup\GooglePlacesAddressLookupProvider;
 use App\Providers\AddressLookup\HomedataAddressLookupProvider;
 use App\Providers\AddressLookup\PostcodesIoAddressLookupProvider;
@@ -67,6 +69,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Product::observe(ProductObserver::class);
+        ProductCategory::observe(ProductCategoryObserver::class);
         FulfilmentProductMapping::observe(FulfilmentProductMappingObserver::class);
         View::composer('layouts.storefront', function ($view) {
             [$cart] = app(ResolveGuestCart::class)->handle(request(), false);
@@ -75,9 +78,7 @@ class AppServiceProvider extends ServiceProvider
                 'searchProducts' => Product::query()->active()->ordered()->get(['name', 'slug'])
                     ->map(fn (Product $product) => ['name' => $product->name, 'url' => route('products.show', $product->slug)])
                     ->values(),
-                'navCategories' => ProductCategory::query()->active()
-                    ->whereHas('products', fn ($query) => $query->active())
-                    ->ordered()->get(['name', 'slug']),
+                'navCategories' => CatalogueNavigation::topLevelWithChildren(),
             ]);
         });
     }

@@ -1,0 +1,231 @@
+Structura canonică.
+
+Pentru SEO, folosesc URL-uri scurte, descriptive și cu termenii pe care i-ar folosi cumpărătorul.
+Google recomandă exact asta, dar precizează că ierarhia site-ului este înțeleasă în primul rând din linkurile dintre pagini, nu doar din forma URL-ului.
+Textele de mai jos sunt scrise pentru oameni și conversie, nu ca simple blocuri de keywords; asta este și direcția recomandată de Google.
+https://developers.google.com/search/docs/specialty/ecommerce/help-google-understand-your-ecommerce-site-structure?hl=en&utm_source=chatgpt.com
+https://developers.google.com/search/docs/fundamentals/creating-helpful-content?utm_source=chatgpt.com
+
+
+
+1. School & Everyday
+
+| Tip           | Nume                                | URL                                                    | Text                                                                                                                                                                                |
+| ------------- | ----------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Categorie** | **School & Everyday**               | `/school-everyday`                                     | **Make everyday things feel completely theirs.** Turn their photo into their own character and add it to personalised school essentials they’ll use, recognise and love every day.  |
+| Subcategorie  | Personalised Water Bottles for Kids | `/school-everyday/personalised-water-bottles-for-kids` | Make their water bottle impossible to mistake. Add their name and their own character to create a personalised bottle made especially for school, days out and everyday adventures. |
+| Subcategorie  | Personalised Lunch Boxes for Kids   | `/school-everyday/personalised-lunch-boxes-for-kids`   | Lunchtime feels a little more special when the box is unmistakably theirs. Personalise it with their name and character for school, nursery and days out.                           |
+| Subcategorie  | Personalised Pencil Tins            | `/school-everyday/personalised-pencil-tins`            | Give their pencils and little school essentials a home that feels completely personal, featuring their own name and illustrated character.                                          |
+| Subcategorie  | Personalised School Backpacks       | `/school-everyday/personalised-school-backpacks`       | A school bag that looks like nobody else’s. Turn their photo into a character and create a backpack they’ll be proud to carry.                                                      |
+| Subcategorie  | Personalised Lunch Bags for Kids    | `/school-everyday/personalised-lunch-bags-for-kids`    | Practical for school, personal to them. Add their name and character to make their lunch bag easy to recognise and much more fun to carry.                                          |
+
+
+
+| Produs                                      | URL                                              | Subtitlu                                                                                                                      |
+| ------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Personalised Kids Water Bottle – 750 ml** | `/products/personalised-kids-water-bottle-750ml` | A personalised 750 ml aluminium bottle with a bright red flip lid, made unique with their name and artwork.                   |
+| **Personalised Lunch Box**                  | `/products/personalised-kids-lunch-box`          | A practical personalised lunch box featuring their own character and name, made to brighten up every school lunchtime.        |
+| **Personalised Pencil Tin**                 | `/products/personalised-pencil-tin`              | A personalised pencil tin decorated with their name and character, perfect for keeping everyday school essentials together.   |
+| **Personalised School Backpack**            | `/products/personalised-school-backpack`         | A personalised school backpack featuring their own illustrated character and name, made to stand out wherever they take it.   |
+| **Personalised Lunch Bag**                  | `/products/personalised-kids-lunch-bag`          | A personalised lunch bag made easy to recognise with their own character and name — practical, playful and completely theirs. |
+
+
+
+
+
+
+
+
+2. Memories & Keepsakes
+Aici schimbăm registrul. Nu mai vindem utilitate. Vindem emoție.
+
+
+| Tip           | Nume                             | URL                                                    | Text                                                                                                                                                                             |
+| ------------- | -------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Categorie** | **Memories & Keepsakes**         | `/memories-keepsakes`                                  | **Turn a face you love into something worth keeping.** Create beautiful personalised artwork from a favourite photo and turn everyday memories into keepsakes for years to come. |
+| Subcategorie  | Personalised Storybook Portraits | `/memories-keepsakes/personalised-storybook-portraits` | Turn someone you love into the star of their own illustration. Created from your photo and transformed into warm, expressive storybook artwork.                                  |
+| Subcategorie  | Personalised Wall Prints         | `/memories-keepsakes/personalised-wall-prints`         | Favourite faces, turned into artwork for your walls. Create a personalised print from a photograph you already treasure.                                                         |
+| Subcategorie  | Framed Personalised Portraits    | `/memories-keepsakes/framed-personalised-portraits`    | Turn a meaningful photograph into finished framed artwork, ready to give, display and keep.                                                                                      |
+| Subcategorie  | Personalised Desk Portraits      | `/memories-keepsakes/personalised-desk-portraits`      | Keep someone special close by with a personalised portrait designed for desks, shelves and little spaces around the home.                                                        |
+| Subcategorie  | Personalised Keepsake Boxes      | `/memories-keepsakes/personalised-keepsake-boxes`      | A special place for little things that matter, personalised with artwork created from the face you love.                                                                         |
+
+
+
+| Produs                                     | URL                                              | Subtitlu                                                                                                                  |
+| ------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| **Personalised Storybook Wall Print – A3** | `/products/personalised-storybook-wall-print-a3` | Turn a favourite photograph into a beautiful A3 storybook-style portrait, created especially for your wall.               |
+| **Framed Storybook Portrait – A3**         | `/products/framed-storybook-portrait-a3`         | Your favourite person transformed into storybook artwork and presented as a framed A3 portrait made to be treasured.      |
+| **Personalised Desk Portrait**             | `/products/personalised-desk-portrait`           | A favourite face transformed into personalised artwork for a desk, shelf or bedside table.                                |
+| **Personalised Keepsake Box**              | `/products/personalised-keepsake-box`            | A personalised keepsake box featuring artwork created from your photo — made for storing the little memories that matter. |
+
+
+
+3. Pets & Family
+
+Aici tema este „the ones you love”, nu doar „pet products”.
+
+| Tip           | Nume                          | URL                                          | Text                                                                                                                                                               |
+| ------------- | ----------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Categorie** | **Pets & Family**             | `/pets-family`                               | **Because some faces mean everything.** Turn favourite family and pet photos into personal artwork and gifts created around the ones who make home feel like home. |
+| Subcategorie  | Personalised Pet Portraits    | `/pets-family/personalised-pet-portraits`    | Turn your favourite pet photo into a characterful personalised portrait that captures the face and personality you know so well.                                   |
+| Subcategorie  | Personalised Pet Gifts        | `/pets-family/personalised-pet-gifts`        | Create something completely personal for a pet lover using artwork made from the animal they love most.                                                            |
+| Subcategorie  | Personalised Pet Bowls        | `/pets-family/personalised-pet-bowls`        | Make their everyday bowl unmistakably theirs with personalised artwork and their name.                                                                             |
+| Subcategorie  | Personalised Family Portraits | `/pets-family/personalised-family-portraits` | Turn a favourite family photograph into warm personalised artwork created to celebrate the people who matter most.                                                 |
+
+
+
+| Produs                                  | URL                                             | Subtitlu                                                                                                                |
+| --------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Personalised Pet Portrait**           | `/products/personalised-pet-portrait`           | Turn a favourite photo of your pet into beautiful personalised artwork designed to capture the face you know and love.  |
+| **Personalised Pet Bowl**               | `/products/personalised-pet-bowl`               | A personalised pet bowl featuring their own illustrated portrait and name — practical every day, but completely theirs. |
+| **Personalised Pet Christmas Ornament** | `/products/personalised-pet-christmas-ornament` | Turn your pet’s photo into a personalised Christmas ornament made to come back to the tree year after year.             |
+
+
+
+
+
+
+
+
+
+4. Gifts & Occasions
+
+Aici nu avem produse proprii. Pagina redistribuie produsele din celelalte trei categorii după motivul pentru care omul cumpără.
+
+| Tip           | Nume                    | URL                                                    | Text                                                                                                                                                            |
+| ------------- | ----------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Categorie** | **Gifts & Occasions**   | `/gifts-occasions`                                     | **Find something personal for the moment that matters.** Birthday, Christmas or simply because — create a gift from a favourite photo and make it truly theirs. |
+| Subcategorie  | Birthday Gifts for Kids | `/gifts-occasions/birthday-gifts-for-kids`             | Make their birthday gift feel like it could only have been made for them. Turn their photo into their own character and create something completely personal.   |
+| Subcategorie  | Christmas Gifts         | `/gifts-occasions/personalised-christmas-gifts`        | Turn favourite faces and memories into personalised Christmas gifts made for the people — and pets — you know best.                                             |
+| Subcategorie  | Gifts for Grandparents  | `/gifts-occasions/personalised-gifts-for-grandparents` | Give Grandma or Grandad something more personal than another ordinary present — artwork and keepsakes created from the faces they love most.                    |
+| Subcategorie  | New Baby Gifts          | `/gifts-occasions/personalised-new-baby-gifts`         | Celebrate one of life’s smallest new arrivals with personalised keepsakes created from a photograph and made to last beyond the newborn days.                   |
+| Subcategorie  | Mother's Day Gifts      | `/gifts-occasions/personalised-mothers-day-gifts`      | Turn the faces and moments she loves most into a personal Mother’s Day gift made especially for her.                                                            |
+| Subcategorie  | Father's Day Gifts      | `/gifts-occasions/personalised-fathers-day-gifts`      | Create a Father’s Day gift around the people, pets and memories that mean the most to him.                                                                      |
+
+
+
+
+
+
+
+kattie.uk/
+│
+├── school-everyday/
+│   ├── personalised-water-bottles-for-kids/
+│   ├── personalised-lunch-boxes-for-kids/
+│   ├── personalised-pencil-tins/
+│   ├── personalised-school-backpacks/
+│   └── personalised-lunch-bags-for-kids/
+│
+├── memories-keepsakes/
+│   ├── personalised-storybook-portraits/
+│   ├── personalised-wall-prints/
+│   ├── framed-personalised-portraits/
+│   ├── personalised-desk-portraits/
+│   └── personalised-keepsake-boxes/
+│
+├── pets-family/
+│   ├── personalised-pet-portraits/
+│   ├── personalised-pet-gifts/
+│   ├── personalised-pet-bowls/
+│   └── personalised-family-portraits/
+│
+├── gifts-occasions/
+│   ├── birthday-gifts-for-kids/
+│   ├── personalised-christmas-gifts/
+│   ├── personalised-gifts-for-grandparents/
+│   ├── personalised-new-baby-gifts/
+│   ├── personalised-mothers-day-gifts/
+│   └── personalised-fathers-day-gifts/
+│
+└── products/
+    ├── personalised-kids-water-bottle-750ml/
+    ├── personalised-kids-lunch-box/
+    ├── personalised-pencil-tin/
+    ├── personalised-school-backpack/
+    ├── personalised-kids-lunch-bag/
+    ├── personalised-storybook-wall-print-a3/
+    ├── framed-storybook-portrait-a3/
+    ├── personalised-desk-portrait/
+    ├── personalised-keepsake-box/
+    ├── personalised-pet-portrait/
+    ├── personalised-pet-bowl/
+    └── personalised-pet-christmas-ornament/
+
+
+
+
+
+
+
+HOME
+└── Template Home
+
+
+CATEGORY
+└── Template Category
+    ├── category hero
+    ├── category intro
+    ├── subcategories
+    └── featured products
+
+
+SUBCATEGORY / SEO LANDING
+└── Template Collection
+    ├── SEO-focused H1 + intro
+    ├── relevant products
+    ├── supporting content
+    ├── FAQ
+    └── internal links
+
+
+PRODUCT
+└── Template Product
+    │
+    ├── PHASE A — CREATE
+    │   ├── product gallery
+    │   ├── title + description + price
+    │   ├── choose variant / colour
+    │   ├── choose artwork style
+    │   ├── add personalisation / name
+    │   ├── upload photo
+    │   └── Generate / Preview
+    │
+    └── PHASE B — PREVIEW & APPROVE
+        ├── generated character
+        ├── real product preview
+        ├── move / resize character
+        ├── change name / variant
+        ├── regenerate artwork
+        ├── approve design
+        └── add to basket
+
+
+ACCOUNT
+└── Template Account
+    ├── My Account
+    ├── My Orders
+    ├── Order Detail
+    └── My Details
+
+
+COMMERCE
+├── Basket
+├── Checkout
+├── Payment
+└── Confirmation
+
+
+CONTENT
+├── FAQ
+├── Delivery
+├── Returns
+├── Privacy
+└── Terms
+
+
+UTILITY
+├── Order Support
+├── Track Order
+├── Sitemap
+└── 404

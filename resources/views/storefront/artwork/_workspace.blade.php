@@ -195,7 +195,7 @@
                     <div class="hidden lg:block">
                         <h1 class="font-display text-5xl">{{ $templated ? $session->product->name : ($session->status->value === 'approved' ? 'This is the one.' : 'Your artwork is ready.') }}</h1>
                         <p class="mt-5 leading-7 text-muted">{{ $templated ? $session->product->short_description : 'Review the generated artwork before continuing.' }}</p>
-                        @if($session->product->categories->isNotEmpty())<p class="mt-4 text-sm text-muted"><span class="font-semibold text-ink">Categories:</span> @foreach($session->product->categories as $category)<a class="hover:text-coral hover:underline" href="{{ route('categories.show', $category) }}">{{ $category->name }}</a>@unless($loop->last) <span aria-hidden="true">·</span> @endunless @endforeach</p>@endif
+                        @if($session->product->categories->isNotEmpty())<p class="mt-4 text-sm text-muted"><span class="font-semibold text-ink">Categories:</span> @foreach($session->product->categories as $category)<a class="hover:text-coral hover:underline" href="{{ $category->url() }}">{{ $category->name }}</a>@unless($loop->last) <span aria-hidden="true">·</span> @endunless @endforeach</p>@endif
                     </div>
 
                     <p x-show="colourError" x-text="colourError" class="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700"></p>
@@ -245,7 +245,7 @@
                     <div class="mt-10 lg:hidden">
                         <h1 class="font-display text-2xl">{{ $templated ? $session->product->name : ($session->status->value === 'approved' ? 'This is the one.' : 'Your artwork is ready.') }}</h1>
                         <p class="mt-4 leading-7 text-muted">{{ $templated ? $session->product->short_description : 'Review the generated artwork before continuing.' }}</p>
-                        @if($session->product->categories->isNotEmpty())<p class="mt-4 text-sm text-muted"><span class="font-semibold text-ink">Categories:</span> @foreach($session->product->categories as $category)<a class="hover:text-coral hover:underline" href="{{ route('categories.show', $category) }}">{{ $category->name }}</a>@unless($loop->last) <span aria-hidden="true">·</span> @endunless @endforeach</p>@endif
+                        @if($session->product->categories->isNotEmpty())<p class="mt-4 text-sm text-muted"><span class="font-semibold text-ink">Categories:</span> @foreach($session->product->categories as $category)<a class="hover:text-coral hover:underline" href="{{ $category->url() }}">{{ $category->name }}</a>@unless($loop->last) <span aria-hidden="true">·</span> @endunless @endforeach</p>@endif
                     </div>
                     <div class="mt-10 border-t border-rose/25 pt-8">
                         <h2 class="font-display text-2xl">About your gift</h2>

@@ -30,6 +30,19 @@
         background-color: rgba(0, 0, 0, 0.8);
     }
 
+    /* Lets the inline "… See more" overlay the end of the clamped second line
+       without the text appearing to run straight into it. */
+    .see-more-fade {
+        background-image: linear-gradient(90deg, rgba(255, 255, 255, 0) 0, #fff 1.5rem, #fff 100%);
+    }
+
+    /* Warm band behind "How it works". The step tiles are transparent, so this
+       is what actually separates the section from the white page. */
+    .home-how-it-works {
+        background-image: linear-gradient(180deg, #fffaf3 0%, #f6e3d3 18%, #f2d9c6 50%, #f6e3d3 82%, #fffaf3 100%);
+    }
+
+
     @media (max-width: 767px) {
         .home-hero {
             background-image: none !important;

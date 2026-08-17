@@ -6,9 +6,9 @@ use App\Domain\Artwork\Actions\ResolveResumableArtworkSession;
 use App\Enums\ProductStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\ProductSlugRedirect;
 use App\Support\CanonicalUrl;
+use App\Support\CatalogueNavigation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -34,9 +34,9 @@ class ProductController extends Controller
             ->with(['images', 'variants' => fn ($query) => $query->active()->ordered()])
             ->paginate(12)
             ->withQueryString();
-        $categories = ProductCategory::query()->active()
-            ->whereHas('products', fn ($query) => $query->active())
-            ->ordered()->get();
+        // The four top-level categories, shown regardless of current stock so the
+        // structure is browsable before the catalogue is fully imported.
+        $categories = CatalogueNavigation::topLevelWithChildren();
         $canonical = $search === '' ? CanonicalUrl::forPaginator(route('products.index'), $products) : route('products.index');
         $robots = $search !== '' ? 'noindex,follow' : null;
 
@@ -53,7 +53,8 @@ class ProductController extends Controller
                 'artworkStyles',
                 'recommendedArtworkStyle',
                 'personalisationFields',
-                'categories' => fn ($query) => $query->active(),
+                // The parent is needed so each category link can build its nested URL.
+                'categories' => fn ($query) => $query->active()->with('parent:id,slug'),
             ])->first();
         if (! $product) {
             $redirect = ProductSlugRedirect::with('product')->where('old_slug', $slug)->first();

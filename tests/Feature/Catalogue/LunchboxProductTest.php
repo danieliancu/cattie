@@ -39,14 +39,14 @@ class LunchboxProductTest extends TestCase
         $this->assertSame(['blue', 'pink', 'white'], $variants->pluck('options')->pluck('colour')->all());
         $this->assertSame([1950], $variants->pluck('price_minor')->unique()->values()->all());
         $this->assertSame('small-lunchbox-v1', $product->designTemplate->key);
-        $this->assertSame(['school-lunch'], $product->categories->pluck('slug')->all());
+        $this->assertSame(['personalised-lunch-boxes-for-kids'], $product->categories->pluck('slug')->all());
         $this->assertSame('blue', $product->preview_configuration['default_variant_options']['colour']);
         $this->assertStringContainsString('BPA-free', $product->preview_configuration['specifications'][0]['value']);
         $this->assertSame('18 × 12.4 × 6 cm', $product->preview_configuration['specifications'][2]['value']);
 
         $this->get(route('products.show', $product->slug))->assertOk()->assertSee('Small Plastic Lunchbox');
         $this->get(route('products.index'))->assertOk()->assertSee('Small Plastic Lunchbox');
-        $this->get(route('categories.show', 'school-lunch'))->assertOk()->assertSee('Small Plastic Lunchbox');
+        $this->get('/school-everyday/personalised-lunch-boxes-for-kids')->assertOk()->assertSee('Small Plastic Lunchbox');
         $this->get(route('sitemap.xml'))->assertOk()->assertSee('/products/small-plastic-lunchbox');
     }
 

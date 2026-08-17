@@ -10,8 +10,10 @@ use App\Http\Controllers\Storefront\CheckoutController;
 use App\Http\Controllers\Storefront\CustomerAuthController;
 use App\Http\Controllers\Storefront\HomeController;
 use App\Http\Controllers\Storefront\InformationPageController;
-use App\Http\Controllers\Storefront\ProductCategoryController;
+use App\Http\Controllers\Storefront\CatalogueController;
+use App\Http\Controllers\Storefront\LegacyCollectionRedirectController;
 use App\Http\Controllers\Storefront\ProductController;
+use App\Support\ReservedSlugs;
 use App\Http\Controllers\Storefront\OrderSupportController;
 use App\Http\Controllers\Admin\OrderSupportPhotoController;
 use App\Http\Controllers\Storefront\ProductPreviewController;
@@ -37,7 +39,7 @@ Route::middleware('auth')->group(function () {
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');
 Route::get('/products/{slug}', [ProductController::class, 'show'])->name('products.show');
 Route::get('/admin-preview/products/{product}', ProductPreviewController::class)->name('admin.products.preview');
-Route::get('/collections/{category:slug}', [ProductCategoryController::class, 'show'])->name('categories.show');
+Route::get('/collections/{slug}', LegacyCollectionRedirectController::class)->where('slug', ReservedSlugs::SLUG_PATTERN)->name('categories.show');
 Route::get('/sitemap', [SitemapController::class, 'index'])->name('sitemap');
 Route::get('/sitemap.xml', [SitemapController::class, 'xml'])->name('sitemap.xml');
 Route::get('/terms-and-conditions', InformationPageController::class)->defaults('page', 'terms-and-conditions')->name('information.terms');
@@ -82,3 +84,23 @@ Route::get('/order-support', [OrderSupportController::class, 'create'])->name('o
 Route::post('/order-support', [OrderSupportController::class, 'store'])->middleware('throttle:10,60')->name('order-support.store');
 Route::get('/order-support/submitted', [OrderSupportController::class, 'submitted'])->name('order-support.submitted');
 Route::get('/admin/order-support/{orderSupportRequest}/photo', [OrderSupportPhotoController::class, 'show'])->middleware('auth')->name('admin.order-support.photo');
+
+/*
+|--------------------------------------------------------------------------
+| Catalogue taxonomy — MUST stay last
+|--------------------------------------------------------------------------
+|
+| Top-level categories own the first path segment, so these patterns are the
+| only thing standing between /products/foo and a category lookup. The slug
+| constraint excludes every reserved application segment, which means the
+| router simply does not match here and falls through to the real route rather
+| than resolving and 404ing inside the controller.
+|
+*/
+Route::get('/{categorySlug}', [CatalogueController::class, 'category'])
+    ->where('categorySlug', ReservedSlugs::routePattern())
+    ->name('catalogue.category');
+
+Route::get('/{categorySlug}/{subcategorySlug}', [CatalogueController::class, 'subcategory'])
+    ->where(['categorySlug' => ReservedSlugs::routePattern(), 'subcategorySlug' => ReservedSlugs::SLUG_PATTERN])
+    ->name('catalogue.subcategory');

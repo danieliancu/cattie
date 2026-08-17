@@ -43,10 +43,25 @@
 
         <nav aria-label="Main navigation" class="hidden items-center gap-6 whitespace-nowrap text-sm font-semibold lg:flex">
             <div class="relative" @click.outside="desktopOpenMenu=null">
-                <a class="nav-link inline-flex cursor-pointer items-center gap-1 {{ request()->routeIs('products.*', 'categories.*') ? 'text-coral' : '' }}" href="{{ route('products.index') }}" @mouseenter="desktopOpenMenu='shop'"><span>Shop</span><i data-lucide="chevron-down" class="h-3.5 w-3.5 cursor-pointer" aria-hidden="true" @click.prevent="desktopOpenMenu = desktopOpenMenu==='shop' ? null : 'shop'"></i></a>
-                <div x-show="desktopOpenMenu==='shop'" x-cloak @mouseleave="desktopOpenMenu=null" class="absolute left-0 top-full z-50 mt-3 w-56 rounded-2xl border border-rose/25 bg-white p-2 shadow-2xl">
-                    @foreach($navCategories as $category)<a href="{{ route('categories.show', $category->slug) }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">{{ $category->name }}</a>@endforeach
-                    @if($navCategories->isEmpty())<a href="{{ route('products.index') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">All products</a>@endif
+                <a class="nav-link inline-flex cursor-pointer items-center gap-1 {{ request()->routeIs('products.*', 'catalogue.*') ? 'text-coral' : '' }}" href="{{ route('products.index') }}" @mouseenter="desktopOpenMenu='shop'"><span>Shop</span><i data-lucide="chevron-down" class="h-3.5 w-3.5 cursor-pointer" aria-hidden="true" @click.prevent="desktopOpenMenu = desktopOpenMenu==='shop' ? null : 'shop'"></i></a>
+                <div x-show="desktopOpenMenu==='shop'" x-cloak @mouseleave="desktopOpenMenu=null" class="absolute left-1/2 top-full z-50 mt-3 w-[min(64rem,calc(100vw-3rem))] -translate-x-1/2 rounded-2xl border border-rose/25 bg-white p-6 shadow-2xl">
+                    @if($navCategories->isNotEmpty())
+                        <div class="grid gap-x-8 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
+                            @foreach($navCategories as $category)
+                                <div>
+                                    <a href="{{ $category->url() }}" class="block font-display text-lg hover:text-coral">{{ $category->name }}</a>
+                                    @if($category->children->isNotEmpty())
+                                        <ul class="mt-3 space-y-1.5">
+                                            @foreach($category->children as $child)<li><a href="{{ $child->url() }}" class="block text-[13px] font-normal leading-5 text-muted hover:text-coral">{{ $child->name }}</a></li>@endforeach
+                                        </ul>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                        <div class="mt-6 border-t border-rose/25 pt-4"><a href="{{ route('products.index') }}" class="font-bold text-coral hover:text-ink">Shop all →</a></div>
+                    @else
+                        <a href="{{ route('products.index') }}" class="block rounded-xl px-4 py-3 hover:bg-blush/40 hover:text-coral">Shop all</a>
+                    @endif
                 </div>
             </div>
             <a class="nav-link" href="{{ route('home') }}#how-it-works">How it works</a>
@@ -71,9 +86,21 @@
                 <a class="nav-link block flex-1" href="{{ route('products.index') }}">Shop</a>
                 <button type="button" class="p-2" @click="mobileOpenMenu = mobileOpenMenu==='shop' ? null : 'shop'" :aria-expanded="mobileOpenMenu==='shop'" aria-controls="mobile-shop-categories" aria-label="Toggle shop categories"><i data-lucide="chevron-down" class="h-4 w-4 transition" :class="mobileOpenMenu==='shop' ? 'rotate-180' : ''" aria-hidden="true"></i></button>
             </div>
-            <div id="mobile-shop-categories" x-show="mobileOpenMenu==='shop'" x-cloak class="ml-3 border-l border-rose/20 pl-3">
-                @foreach($navCategories as $category)<a href="{{ route('categories.show', $category->slug) }}" class="nav-link block text-sm font-normal">{{ $category->name }}</a>@endforeach
-                @if($navCategories->isEmpty())<a href="{{ route('products.index') }}" class="nav-link block text-sm font-normal">All products</a>@endif
+            <div id="mobile-shop-categories" x-show="mobileOpenMenu==='shop'" x-cloak class="ml-3 border-l border-rose/20 pl-3" x-data="{openCategory:null}">
+                @foreach($navCategories as $category)
+                    <div class="flex items-center justify-between">
+                        <a class="nav-link block flex-1 text-sm" href="{{ $category->url() }}">{{ $category->name }}</a>
+                        @if($category->children->isNotEmpty())
+                            <button type="button" class="p-2" @click="openCategory = openCategory==={{ $loop->index }} ? null : {{ $loop->index }}" :aria-expanded="openCategory==={{ $loop->index }}" aria-controls="mobile-subcategories-{{ $category->slug }}" aria-label="Toggle {{ $category->name }} subcategories"><i data-lucide="chevron-down" class="h-4 w-4 transition" :class="openCategory==={{ $loop->index }} ? 'rotate-180' : ''" aria-hidden="true"></i></button>
+                        @endif
+                    </div>
+                    @if($category->children->isNotEmpty())
+                        <div id="mobile-subcategories-{{ $category->slug }}" x-show="openCategory==={{ $loop->index }}" x-cloak class="ml-3 border-l border-rose/20 pl-3">
+                            @foreach($category->children as $child)<a href="{{ $child->url() }}" class="nav-link block text-sm font-normal">{{ $child->name }}</a>@endforeach
+                        </div>
+                    @endif
+                @endforeach
+                <a href="{{ route('products.index') }}" class="nav-link block text-sm font-normal">Shop all</a>
             </div>
             <a class="nav-link block" href="{{ route('home') }}#how-it-works">How it works</a>
             <div class="flex items-center justify-between">
@@ -112,7 +139,7 @@
 @endif
 <main id="main-content">{{ $slot }}</main>
 <footer class="mt-24 border-t border-rose/20 bg-cream/95">
-    <div class="shell grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-[2.2fr_1fr_1fr_1fr] lg:gap-10">
+    <div class="shell grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-[1.9fr_1fr_1fr_1fr_1fr] lg:gap-10">
         <div class="lg:pr-12 xl:pr-20">
             <div class="brand relative ml-11 inline-flex">Kattie<span>.</span>uk<img src="{{ asset('images/icon.gif') }}" class="absolute h-auto w-[65px]" style="left:-60px;bottom:-5px;" alt="" aria-hidden="true"><span class="absolute left-0 top-[calc(100%-6px)] whitespace-nowrap pl-[5px] font-sans text-[8px] font-light tracking-[0.8px] text-muted">LITTLE FACES. BIG LOVE</span></div>
             <p class="mt-5 max-w-md text-sm leading-6 text-muted">Thoughtful personalised gifts, created from the photographs and little moments you already treasure.</p>
@@ -122,6 +149,13 @@
                 <input id="footer-email" type="email" placeholder="Email address" class="min-w-0 flex-1 rounded-full border border-rose/40 bg-white px-4 py-2.5 text-sm">
                 <button type="submit" class="cursor-pointer rounded-full bg-coral px-5 py-2.5 text-sm font-bold text-white transition hover:bg-ink">Subscribe</button>
             </form>
+        </div>
+        <div>
+            <h2 class="text-xs font-bold uppercase tracking-[.16em] text-ink">Shop</h2>
+            <ul class="mt-5 space-y-3 text-sm leading-6 text-muted">
+                @foreach($navCategories as $category)<li><a class="hover:text-coral" href="{{ $category->url() }}">{{ $category->name }}</a></li>@endforeach
+                <li><a class="hover:text-coral" href="{{ route('products.index') }}">Shop all</a></li>
+            </ul>
         </div>
         <div>
             <h2 class="text-xs font-bold uppercase tracking-[.16em] text-ink">About Us</h2>

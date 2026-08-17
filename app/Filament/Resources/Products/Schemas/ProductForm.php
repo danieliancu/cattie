@@ -4,6 +4,8 @@ namespace App\Filament\Resources\Products\Schemas;
 
 use App\Domain\Catalogue\Actions\ProductPublishReadiness;
 use App\Enums\ProductStatus;
+use App\Models\ProductCategory;
+use Illuminate\Database\Eloquent\Builder;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -31,7 +33,25 @@ class ProductForm
                 TextInput::make('meta_title')->maxLength(255), Textarea::make('meta_description')->maxLength(160),
             ])->columns(2)->columnSpanFull(),
             Section::make('Classification and personalisation')->schema([
-                Select::make('categories')->relationship('categories', 'name')->multiple()->preload(),
+                // Products belong to leaf subcategories only. Multiple selection is
+                // deliberate: occasion collections reuse products from other families
+                // without ever duplicating the product record.
+                Select::make('categories')
+                    ->relationship(
+                        name: 'categories',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: fn (Builder $query) => $query
+                            ->whereDoesntHave('children')
+                            ->with('parent:id,name')
+                            ->orderBy('sort_order')->orderBy('name'),
+                    )
+                    ->getOptionLabelFromRecordUsing(fn (ProductCategory $record): string => $record->parent
+                        ? $record->parent->name.' — '.$record->name
+                        : $record->name)
+                    ->multiple()
+                    ->preload()
+                    ->searchable()
+                    ->helperText('Assign the most specific collections. Top-level category pages pick up their subcategories automatically.'),
                 Select::make('artworkStyles')->relationship('artworkStyles', 'name')->multiple()->preload(),
                 Select::make('recommended_artwork_style_id')->relationship('recommendedArtworkStyle', 'name'),
                 KeyValue::make('preview_configuration')->keyLabel('Setting')->valueLabel('Value'),

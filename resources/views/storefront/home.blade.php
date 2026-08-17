@@ -1,11 +1,32 @@
 <x-layouts.storefront title="Kattie.uk — Turn favourite photos into magical gifts" description="Turn a favourite family or pet photo into personalised artwork and a meaningful gift.">
     <section class="home-hero relative overflow-hidden bg-cream bg-cover bg-[68%_center] bg-no-repeat" style="background-image: url('{{ asset('images/hero.png') }}')">
         <div class="absolute inset-0 bg-gradient-to-r from-cream/95 via-cream/55 to-transparent lg:via-transparent"></div>
-        <div class="shell relative flex min-h-[650px] items-center py-16">
-            <div class="relative z-10"><p class="eyebrow">Made from a moment you love</p><h1 class="mt-5 max-w-xl font-display text-5xl leading-[1.02] sm:text-6xl lg:text-7xl">Turn their favourite photo into <em class="text-coral not-italic">something magical.</em></h1><p class="mt-7 max-w-lg text-lg leading-8 text-muted">We transform your photograph into beautiful personalised artwork, then make it into a gift they’ll want to keep close.</p><a href="{{ route('products.index') }}" class="button-primary mt-9">Shop personalised gifts <span aria-hidden="true">→</span></a><p class="mt-5 text-sm text-muted">See your artwork before you order.</p></div>
+        {{-- Mobile starts the copy at the top: centring inside the tall hero was
+             what put empty space above the eyebrow. --}}
+        <div class="shell relative flex min-h-[520px] items-start pb-10 pt-0 sm:min-h-[650px] sm:items-center sm:py-16">
+            <div class="relative z-10"><p class="eyebrow">Made from a moment you love</p><h1 class="mt-5 max-w-xl font-display text-[10vw] leading-[1.05] sm:text-6xl sm:leading-[1.02] lg:text-7xl">Turn their favourite photo into <em class="text-coral not-italic">something magical.</em></h1><p class="mt-7 max-w-lg text-lg leading-8 text-muted">We transform your photograph into beautiful personalised artwork, then make it into a gift they’ll want to keep close.</p><a href="{{ route('products.index') }}" class="button-primary mt-9">Shop personalised gifts <span aria-hidden="true">→</span></a><p class="mt-5 text-sm text-muted">See your artwork before you order.</p></div>
         </div>
     </section>
-    <section id="how-it-works" class="w-full max-w-full px-4 py-24 sm:px-6 lg:px-10">
+    @if($categories->isNotEmpty())
+        <section class="shell py-20">
+            <div class="section-heading"><p class="eyebrow">Find your moment</p><h2>Where would you like to start?</h2></div>
+            <div class="mt-12 grid grid-cols-2 justify-items-center gap-y-10 gap-x-5 sm:gap-x-6 lg:grid-cols-4">
+                @foreach($categories as $category)
+                    @php($tile = $category->cardImage())
+                    <a href="{{ $category->url() }}" class="group flex w-full max-w-[18rem] flex-col items-center text-center">
+                        <div class="aspect-square w-full overflow-hidden rounded-full bg-sand ring-1 ring-ink/5 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-2xl group-focus-within:ring-2 group-focus-within:ring-coral">
+                            @if($tile)
+                                {{-- Decorative: the category name sits directly beneath it. --}}
+                                <img src="{{ $tile['url'] }}" alt="" class="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" aria-hidden="true">
+                            @endif
+                        </div>
+                        <h3 class="mt-6 font-display text-2xl transition group-hover:text-coral">{{ $category->name }}</h3>
+                    </a>
+                @endforeach
+            </div>
+        </section>
+    @endif
+    <section id="how-it-works" class="home-how-it-works w-full max-w-full px-4 py-24 sm:px-6 lg:px-10">
         <div class="section-heading"><p class="eyebrow">Simple from start to finish</p><h2>One photo. Four little steps.</h2></div>
         <ol class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             @foreach([
@@ -14,20 +35,24 @@
                 ['03', '03.png', 'See your artwork', 'Your real photo becomes a story cartoon. Review your storybook character preview.'],
                 ['04', '04.png', 'Approve & order', 'Happiness is on the way! Approve your artwork, place your order, and we’ll take care of the rest.'],
             ] as [$number, $image, $heading, $copy])
-            <li class="flex flex-col overflow-hidden rounded-3xl border border-ink/5 bg-white p-7 shadow-sm sm:p-8">
+            {{-- Transparent tiles: the section's own background carries the band, so the
+                 cards stay unboxed and the step imagery sits directly on it. --}}
+            <li class="flex flex-col overflow-hidden rounded-3xl p-7 sm:p-8">
                 <div class="flex items-baseline gap-3">
                     <span class="font-display text-3xl text-coral">{{ $number }}</span>
                     <h3 class="font-display text-xl">{{ $heading }}</h3>
                 </div>
                 <div class="mt-5 flex flex-1 items-center gap-5">
                     <p class="w-1/3 shrink-0 text-sm leading-6 text-muted">{{ $copy }}</p>
-                    <img src="{{ asset('images/how/'.$image) }}" alt="Step {{ $number }}: {{ $heading }}" class="h-40 w-2/3 rounded-2xl object-cover">
+                    {{-- multiply lets the step artwork's white ground drop out against
+                         the tinted band instead of sitting on a visible white card. --}}
+                    <img src="{{ asset('images/how/'.$image) }}" alt="Step {{ $number }}: {{ $heading }}" class="h-40 w-2/3 rounded-2xl object-cover mix-blend-multiply">
                 </div>
             </li>
             @endforeach
         </ol>
     </section>
     <section class="bg-white/70 py-24"><div class="shell"><div class="section-heading flex-row items-end justify-between text-left"><div><p class="eyebrow">Made personal</p><h2>Gifts with a story inside.</h2></div><a href="{{ route('products.index') }}" class="hidden font-bold text-coral md:block">See all gifts →</a></div><div class="mt-12 grid grid-cols-2 gap-4 sm:gap-8 lg:grid-cols-4">@foreach($featuredProducts as $product)<x-product-card :product="$product" />@endforeach</div></div></section>
-    <section class="shell py-24"><div class="section-heading"><p class="eyebrow">Choose the feeling</p><h2>Two ways to tell their story.</h2><p>Each style is created to keep the person—or pet—you love at the heart of the picture.</p></div><div class="mx-auto mt-12 grid max-w-4xl gap-6 md:grid-cols-2">@foreach($artworkStyles as $style)<article class="relative flex items-center gap-4 overflow-hidden rounded-[2rem] p-9 {{ $style->slug === 'storybook-cartoon' ? 'bg-sky/45' : 'bg-sand' }}"><div class="min-w-0 flex-1"><div class="mb-8 h-3 w-16 rounded-full {{ $style->slug === 'storybook-cartoon' ? 'bg-coral' : 'bg-sage' }}"></div><h3 class="font-display text-3xl">{{ $style->slug === 'storybook-cartoon' ? 'Cartoon' : $style->name }}</h3><p class="mt-3 leading-7 text-muted">{{ $style->description }}</p></div>@if(in_array($style->slug, ['storybook-cartoon', 'hand-drawn']))<img src="{{ asset('images/artwork-styles/'.$style->slug.'.png') }}" alt="{{ $style->slug === 'storybook-cartoon' ? 'Cartoon' : $style->name }} artwork style example" class="h-auto w-[200px] shrink-0 object-contain mix-blend-multiply">@endif</article>@endforeach</div></section>
+    <section class="shell py-24"><div class="section-heading"><p class="eyebrow">Choose the feeling</p><h2>Two ways to tell their story.</h2><p>Each style is created to keep the person—or pet—you love at the heart of the picture.</p></div><div class="mx-auto mt-12 grid max-w-4xl gap-6 md:grid-cols-2">@foreach($artworkStyles as $style)<article class="relative flex items-center gap-2 overflow-hidden rounded-[2rem] p-9 pr-3 {{ $style->slug === 'storybook-cartoon' ? 'bg-sky/45' : 'bg-sand' }}"><div class="min-w-0 flex-1"><div class="mb-8 h-3 w-16 rounded-full {{ $style->slug === 'storybook-cartoon' ? 'bg-coral' : 'bg-sage' }}"></div><h3 class="font-display text-3xl">{{ $style->slug === 'storybook-cartoon' ? 'Cartoon' : $style->name }}</h3><p class="mt-3 leading-7 text-muted">{{ $style->description }}</p></div>@if(in_array($style->slug, ['storybook-cartoon', 'hand-drawn']))<img src="{{ asset('images/artwork-styles/'.$style->slug.'.png') }}" alt="{{ $style->slug === 'storybook-cartoon' ? 'Cartoon' : $style->name }} artwork style example" class="ml-auto h-auto w-[200px] shrink-0 object-contain mix-blend-multiply">@endif</article>@endforeach</div></section>
     <section class="shell"><div class="rounded-[2.5rem] bg-ink px-8 py-14 text-center text-white sm:px-16"><p class="eyebrow text-rose">Thoughtfully made</p><h2 class="mt-4 font-display text-4xl">Your memory stays the main character.</h2><p class="mx-auto mt-5 max-w-2xl leading-7 text-white/70">You choose the photo, style and final artwork. Nothing goes to print until you’ve seen and approved it.</p></div></section>
 </x-layouts.storefront>

@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\Domain\Catalogue\Actions\SyncProductMarketingAssets;
 use App\Models\ArtworkStyle;
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\ProductDesignTemplate;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Storage;
@@ -54,7 +53,8 @@ class CatalogueSeeder extends Seeder
         $this->seedTreatPodWaterBottle();
         $this->seedSmallPlasticLunchbox();
         $this->seedStationeryPencilTin();
-        $this->seedProductCategories();
+        // Runs last: the taxonomy assigns the products seeded above.
+        $this->call(CategoryTaxonomySeeder::class);
     }
 
     private function seedProdigiWaterBottle(): void
@@ -247,55 +247,6 @@ class CatalogueSeeder extends Seeder
             $product,
             resource_path('product-assets/cattie/water-bottle-with-red-flip-lid'),
         );
-    }
-
-    private function seedProductCategories(): void
-    {
-        $categories = collect([
-            [
-                'name' => 'School & Lunch',
-                'slug' => 'school-lunch',
-                'short_description' => 'Personalised everyday essentials for school, lunches and days out.',
-                'meta_title' => 'Personalised School & Lunch Gifts for Kids | Kattie.uk',
-                'meta_description' => 'Shop personalised school and lunch gifts for children, created with their name and unique Kattie artwork.',
-            ],
-            [
-                'name' => 'Kids Drinkware',
-                'slug' => 'kids-drinkware',
-                'short_description' => 'Personalised bottles and drinkware made especially for children.',
-                'meta_title' => 'Personalised Kids Drinkware | Kattie.uk',
-                'meta_description' => 'Discover personalised kids drinkware featuring their name and unique artwork, designed for school, sports and everyday adventures.',
-            ],
-            [
-                'name' => 'School Accessories',
-                'slug' => 'school-accessories',
-                'short_description' => 'Personalised school accessories made for lessons, homework and creative little minds.',
-                'meta_title' => 'Personalised School Accessories for Kids | Kattie.uk',
-                'meta_description' => 'Shop personalised school accessories for children, created with their name and unique Kattie artwork.',
-            ],
-        ])->map(function (array $data, int $position) {
-            return ProductCategory::query()->updateOrCreate(
-                ['slug' => $data['slug']],
-                $data + ['description' => null, 'is_active' => true, 'sort_order' => $position],
-            );
-        });
-
-        $product = Product::query()->where('slug', 'water-bottle-with-red-flip-lid')->firstOrFail();
-        $product->categories()->sync($categories
-            ->whereIn('slug', ['school-lunch', 'kids-drinkware'])
-            ->values()
-            ->mapWithKeys(fn (ProductCategory $category, int $position) => [
-                $category->id => ['sort_order' => $position],
-            ])->all());
-
-        Product::query()->where('slug', 'small-plastic-lunchbox')->firstOrFail()->categories()->sync([
-            $categories->firstWhere('slug', 'school-lunch')->id => ['sort_order' => 1],
-        ]);
-
-        Product::query()->where('slug', 'personalised-stationery-pencil-tin')->firstOrFail()->categories()->sync([
-            $categories->firstWhere('slug', 'school-accessories')->id => ['sort_order' => 0],
-            $categories->firstWhere('slug', 'school-lunch')->id => ['sort_order' => 1],
-        ]);
     }
 
     private function seedSmallPlasticLunchbox(): void

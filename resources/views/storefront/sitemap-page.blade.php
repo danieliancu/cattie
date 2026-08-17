@@ -12,10 +12,12 @@
                 <ul class="mt-5 space-y-5">
                     @foreach($categories as $category)
                         <li>
-                            <a class="font-bold text-ink hover:text-coral" href="{{ route('categories.show', $category) }}">{{ $category->name }}</a>
-                            <ul class="mt-2 space-y-2 border-l border-rose/30 pl-4 text-sm text-muted">
-                                @foreach($category->products as $product)<li><a class="hover:text-coral" href="{{ route('products.show', $product->slug) }}">{{ $product->name }}</a></li>@endforeach
-                            </ul>
+                            <a class="font-bold text-ink hover:text-coral" href="{{ $category->url() }}">{{ $category->name }}</a>
+                            @if($category->children->isNotEmpty())
+                                <ul class="mt-2 space-y-2 border-l border-rose/30 pl-4 text-sm text-muted">
+                                    @foreach($category->children as $child)<li><a class="hover:text-coral" href="{{ $child->url() }}">{{ $child->name }}</a></li>@endforeach
+                                </ul>
+                            @endif
                         </li>
                     @endforeach
                 </ul>

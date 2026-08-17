@@ -4,7 +4,7 @@
 >
 > **Regulă de întreținere:** acest fișier trebuie actualizat la fiecare modificare care schimbă funcționalitatea, arhitectura, schema de date, configurarea, interfața, asseturile, integrările, testele sau limitările cunoscute. O schimbare nu este considerată documentată complet până când secțiunile afectate și jurnalul de la final reflectă noua stare.
 >
-> **Ultima actualizare:** 15 august 2026 (Order Support — Phase 4).
+> **Ultima actualizare:** 16 august 2026 (Arhitectura canonică de catalog — taxonomie ierarhică).
 
 ## 1. Rezumat executiv
 
@@ -166,7 +166,49 @@ Catalogul seed-uit include produse demo și produse cu integrare/template real:
 - Small Plastic Lunchbox;
 - Personalised Stationery & Pencil Tin.
 
-Categorii definite: `School & Lunch`, `Kids Drinkware`, `School Accessories`.
+### Taxonomia canonică (Categorie → Subcategorie → Produs)
+
+`ProductCategory` este ierarhic, pe exact **două** niveluri, printr-un `parent_id` nullable self-referențial pe aceeași tabelă `product_categories` (fără tabele separate, fără câmp `type` — distincția este derivată din `parent_id === null`).
+
+Cele patru categorii de nivel superior, în ordinea `sort_order`:
+
+| # | Categorie | Slug | Subcategorii |
+|---:|---|---|---:|
+| 0 | School & Everyday | `school-everyday` | 5 |
+| 1 | Memories & Keepsakes | `memories-keepsakes` | 5 |
+| 2 | Pets & Family | `pets-family` | 4 |
+| 3 | Gifts & Occasions | `gifts-occasions` | 6 |
+
+Total: **4 categorii + 20 subcategorii**, seed-uite idempotent de `Database\Seeders\CategoryTaxonomySeeder` (apelat la finalul `CatalogueSeeder`, fiindcă atribuie produsele seed-uite înainte). Copy-ul vizibil este stocat în baza de date (`short_description`), nu hardcodat în Blade — adminul rămâne sursa de adevăr.
+
+Reguli de integritate (invariante):
+
+- adâncime maximă exact 2 — un părinte trebuie să fie el însuși top-level;
+- o categorie nu poate fi propriul părinte;
+- o categorie care are copii nu poate primi un părinte;
+- o categorie cu copii nu poate fi ștearsă (`restrictOnDelete` + verificare în observer);
+- slug-ul unei categorii top-level nu poate fi un slug rezervat al aplicației.
+
+Validarea are **trei straturi distincte**: (1) formularul Filament validează înainte de save și produce erori inline pe câmp — acesta este stratul destinat utilizatorului; (2) `App\Observers\ProductCategoryObserver` este plasă de siguranță pentru scrieri care ocolesc formularul (seedere, tinker, CLI, acțiuni de domeniu) și aruncă `App\Exceptions\InvalidCategoryHierarchyException`; (3) foreign key-ul din bază. În uz normal observer-ul nu se declanșează niciodată.
+
+**Categoriile legacy** `School & Lunch`, `Kids Drinkware`, `School Accessories` au fost eliminate. Seeder-ul migrează întâi asocierile, apoi detașează explicit orice rând rămas în `product_category` și abia apoi șterge rândul de categorie — fără a depinde de comportamentul de cascade al foreign key-ului, astfel încât rezultatul este identic pe SQLite (unde enforcement-ul depinde de un pragma) și pe MySQL.
+
+Atribuirea produselor existente (numai maparea de taxonomie s-a schimbat; variante, template-uri, configurație AI, mapping-uri de fulfilment, prețuri și artwork au rămas neatinse):
+
+| Produs | Subcategorie leaf |
+|---|---|
+| Water Bottle with Red Flip Lid | Personalised Water Bottles for Kids |
+| Small Plastic Lunchbox | Personalised Lunch Boxes for Kids |
+| Personalised Stationery & Pencil Tin | Personalised Pencil Tins |
+| Children's Storybook Wall Print | Personalised Wall Prints |
+| Best Friend Pet Portrait | Personalised Pet Portraits |
+| Our Family Art Print | Personalised Family Portraits |
+
+`Little Moments Mug` și `Cuddle Close Cushion` au rămas deliberat neatribuite — nu pot fi clasificate cu certitudine, iar inventarea de taxonomie ar fi fost mai dăunătoare decât absența ei.
+
+Un produs poate aparține **mai multor subcategorii leaf** prin pivotul many-to-many existent (esențial pentru `Gifts & Occasions`, care își va redistribui produsele din celelalte familii). Produsul nu este niciodată duplicat: rămâne un singur record și un singur URL canonic `/products/{slug}`.
+
+Produsele se atribuie normal doar subcategoriilor leaf; paginile de categorie de nivel superior agregă produsele copiilor lor.
 
 Produsele reale templated au variante, SKU intern, mapping de fulfilment, rezoluții exacte de tipar, galerii pe variantă și personalizare. Exemple importante:
 
@@ -510,8 +552,15 @@ Snapshot-urile de personalizare și artwork sunt păstrate pe entitățile tranz
 
 Panoul este disponibil sub `/admin` și include:
 
-- Products și imagini/variante/relații;
-- Product Categories;
+- Products și imagini/variante/relații; selectorul de categorii oferă **numai** subcategorii leaf, cu etichete contextuale `Părinte — Copil` (ex. `School & Everyday — Personalised Water Bottles for Kids`), selecție multiplă păstrată pentru reutilizarea produselor în colecțiile de ocazii;
+- Product Categories, cu ierarhie completă:
+  - formular: Name, Slug, Parent category, Short description / landing intro, Description / supporting content, SEO title, SEO description, Sort order, Published;
+  - selectorul de părinte este searchable, oferă doar categorii top-level, se exclude pe sine și este dezactivat + `dehydrated(false)` pentru o categorie care are deja copii (dezactivarea singură nu ar opri un request fabricat);
+  - fiecare invariantă are `->rule()` propriu, deci încălcările apar ca erori inline pe câmp, nu ca excepție;
+  - preview read-only al URL-ului canonic, construit prin `ProductCategory::urlFor()` → `route()`, deci corect pe local/staging/producție;
+  - tabel cu Name (copiii indentați), Type (`Category`/`Subcategory`, derivat din `parent_id`), Parent, Slug, calea canonică completă, numărul de produse, sort order și Published, sortat implicit astfel încât copiii apar sub părintele lor;
+  - filtre: categorii de nivel superior / subcategorii / published;
+  - ștergerea unei categorii cu copii este oprită cu notificare, înainte de a ajunge la foreign key;
 - Product Design Templates și versiuni;
 - Fulfilment Product Mappings;
 - Shipping Methods, cu provider, service code, preț, estimare în zile lucrătoare, țară, status și ordine;
@@ -525,9 +574,43 @@ Panoul este disponibil sub `/admin` și include:
 
 ## 15. Rute și suprafețe publice
 
-Aplicația are 76 de rute non-vendor (72 anterior + 4 noi în această fază: `order-support.create`, `order-support.store`, `order-support.submitted`, `admin.order-support.photo`). Grupurile principale:
+Aplicația are 78 de rute non-vendor (76 anterior + 2 noi în această fază: `catalogue.category`, `catalogue.subcategory`; ruta `categories.show` există în continuare, dar a fost repurposată ca redirect 301).
 
-- home, products, categories, related content și sitemap;
+### Structura canonică de URL-uri
+
+```text
+/{category-slug}                        → pagina de categorie
+/{category-slug}/{subcategory-slug}     → pagina de colecție/subcategorie
+/products/{product-slug}                → pagina de produs (neschimbată)
+```
+
+Exemple: `/school-everyday`, `/school-everyday/personalised-water-bottles-for-kids`, `/products/personalised-kids-water-bottle-750ml`.
+
+Generarea URL-urilor este **centralizată**: `ProductCategory::url()` (și `ProductCategory::urlFor(?string $parentSlug, string $slug)` pentru cazurile fără model persistat, cum e preview-ul din admin). Nicio concatenare manuală de căi în Blade, niciun host hardcodat — totul trece prin `route()`, deci funcționează identic local, pe staging și în producție.
+
+### Siguranța rutelor
+
+Cele două rute dinamice sunt declarate **ultimele** în `routes/web.php` și au constrângeri regex pe primul segment care exclud explicit slug-urile rezervate (`App\Support\ReservedSlugs`). Rezultatul este că `/products/foo` nu poate fi *niciodată* interpretat ca `category=products, subcategory=foo`: routerul pur și simplu nu face match și trece mai departe la ruta reală, în loc să rezolve și să dea 404 în controller.
+
+`ReservedSlugs` este o listă `const` (nu derivată la runtime din `Route::getRoutes()`, care ar fi circulară în timpul definirii rutelor și incompatibilă cu `route:cache`), completată de `SLUG_PATTERNS` pentru segmentele al căror nume variază între instalări — concret prefixul hash-uit al Livewire (`livewire-a36122cd`). Două teste de gardă verifică automat că lista rămâne sincronizată cu tabela de rutare reală și cu directoarele din `public/`.
+
+Validarea de ownership pentru `/{category}/{subcategory}` este **structurală**: copilul este căutat *prin* părinte (`$parent->children()->active()->where('slug', …)`), deci un slug care există sub alt părinte nu poate rezolva aici. `/pets-family/personalised-water-bottles-for-kids` întoarce 404, nu redirect. Taxonomia inactivă (părinte sau copil) întoarce 404.
+
+### Redirecturi legacy
+
+`/collections/{slug}` nu mai este canonic; este exclusiv redirect permanent, servit de `LegacyCollectionRedirectController`. Rezolvarea: harta explicită din `config/catalogue.php` → căutare directă după slug în `product_categories` → 404. Ținta este mereu `$category->url()`, deci redirectul este corect la ambele niveluri și nu produce niciodată lanțuri.
+
+| URL vechi | Redirect 301 |
+|---|---|
+| `/collections/school-lunch` | `/school-everyday` |
+| `/collections/kids-drinkware` | `/school-everyday/personalised-water-bottles-for-kids` |
+| `/collections/school-accessories` | `/school-everyday/personalised-pencil-tins` |
+
+Niciun URL `/collections/...` nu apare ca `canonical` și niciunul nu intră în `sitemap.xml`.
+
+Grupurile principale de rute:
+
+- home, products, categorii/subcategorii, related content și sitemap;
 - artwork start/show/upload/status/assets/original/regenerate/cancel;
 - design preview, editor background, layout, name și variant;
 - approve, add to cart și change artwork;
@@ -540,9 +623,58 @@ Aplicația are 76 de rute non-vendor (72 anterior + 4 noi în această fază: `o
 - webhook-uri Stripe și TreatPod;
 - resurse admin Filament.
 
+## 15b. Navigație, template-uri de catalog și SEO
+
+### Sursa de date pentru navigație
+
+`App\Support\CatalogueNavigation::topLevelWithChildren()` este singura interogare din spatele fiecărei suprafețe bazate pe taxonomie: header, homepage, chip-urile din `/products`, footer și ambele sitemap-uri. Două interogări în total, fără N+1; copiii primesc `setRelation('parent', …)` astfel încât `url()` să nu mai emită interogarea de fallback.
+
+Condiția anterioară „ascunde categoriile care nu au produse active” a fost **eliminată deliberat** din navigație: structura trebuie să fie navigabilă înainte de importul produselor. Indexabilitatea este tratată separat (vezi mai jos), nu prin ascundere.
+
+Notă de implementare importantă: listele de coloane trebuie să conțină `id` și `parent_id` — fără `id` relația `children` nu se hidratează, iar fără `parent_id` un copil nu își poate construi URL-ul.
+
+### Meniu
+
+- **Desktop:** dropdown-ul `Shop` a devenit un mega-menu pe patru coloane (categorie + subcategoriile ei), cu link explicit `Shop all` către `/products`.
+- **Mobil:** acordeon pe două niveluri — fiecare categorie are propriul buton de expandare cu `aria-expanded`/`aria-controls`/`aria-label`, deci cele 20 de subcategorii nu sunt niciodată turnate într-o singură listă.
+- Neschimbate: logo-ul Kattie.uk, `icon.gif`, `LITTLE FACES. BIG LOVE`, căutarea, linkul roșu `Order Support`, `My Account`, `Basket` și badge-ul de coș.
+- **Footer:** coloană nouă `Shop` cu cele patru categorii de nivel superior plus `Shop all`; coloanele About Us / Customer Service / Contact Us au rămas intacte, iar grila a trecut de la patru la cinci coloane pe desktop.
+- **Homepage:** secțiune nouă „Where would you like to start?” cu exact cele patru categorii de nivel superior, vizibile și cu zero produse; subcategoriile nu apar pe homepage. Fiecare categorie este un *tile* cu imaginea ei pe fundal (`object-cover`), peste care stă `.category-tile-overlay`, cu titlul și descrierea în alb și `Explore →` în coral/roz. Overlay-ul este **gradient, nu plat**: 30% sus → 88% jos. Un strat uniform de 80% negru s-a dovedit că șterge complet imaginea (tile-ul devenea un dreptunghi aproape uniform), așa că întunecarea este gradată — slabă în zona în care se vede fotografia, puternică în treimea inferioară unde stau titlul și descrierea. Imaginea are `alt=""` și `aria-hidden`, fiind pur decorativă — numele categoriei este deja titlul.
+- **Secțiunea „How it works”** stă pe o bandă caldă proprie (`.home-how-it-works`, gradient vertical `cream → #f2d9c6 → cream`), iar cardurile de pas au devenit **transparente** — fără fundal alb, fără bordură și fără umbră — astfel încât banda secțiunii este cea care separă zona de restul paginii. Imaginile de pas folosesc `mix-blend-multiply`, deci fundalul lor alb dispare în bandă în loc să stea pe un card vizibil.
+
+Fundalurile de categorie sunt **texturi abstracte din paleta brandului, generate procedural — nu fotografii**, cu contrast intenționat ridicat (highlight luminos + umbră adâncă) fiindcă un degrade pastelat se aplatizează complet sub overlay, fiindcă stau oricum sub un overlay negru de 80%. Sursele sunt versionate în `database/seeders/assets/categories/{slug}.jpg` (1400 × 900, JPEG) și publicate pe disk-ul `public` sub `categories/{slug}.jpg` de `CategoryTaxonomySeeder`, care **nu suprascrie niciodată** o imagine încărcată deja din admin (`whereNull('image_storage_key')`). Pot fi înlocuite oricând cu fotografii reale din Filament, fără modificări de cod.
+- **`/products`:** chip-urile „Shop by category” listează acum cele patru categorii de nivel superior.
+
+### Template Category (`storefront/categories/category.blade.php`)
+
+Reia **exact layout-ul paginii `/products`**: eyebrow `Personalised gifts`, `H1 = category.name`, intro din `short_description`, apoi subcategoriile ca **pills orizontale** — același rând de chip-uri sticky, scrollabil pe mobil și wrap pe desktop, cu aceleași clase ca „Shop by category”. Fără imagini și fără descrieri pe pills: doar numele subcategoriei.
+
+Dacă există produse active în subcategorii, ele apar dedesubt în grila standard de produse (fără titlu separat, ca pe `/products`). Dacă nu există, grila este pur și simplu omisă — nu se afișează niciodată o cutie „No products found” pe pagina de categorie. `BreadcrumbList` JSON-LD.
+
+### Template Collection (`storefront/categories/show.blade.php`)
+
+Breadcrumb `Home → Categorie → Subcategorie`, `H1 = subcategory.name`, intro din `short_description`, grila de produse cu sortarea și paginarea existente, iar `description` este randat doar dacă are conținut. Când colecția este goală, pagina **există în continuare** și afișează o stare prietenoasă („We're adding this collection soon.” + `Browse all gifts`), nu o pagină ruptă. Sub conținutul principal apar linkuri interne către subcategoriile-surori sub titlul `You may also like`. `BreadcrumbList` JSON-LD mereu; `ItemList` doar când există efectiv produse.
+
+### Regula SEO pentru colecții goale
+
+O subcategorie activă cu **zero** produse active primește `robots: noindex,follow`, își păstrează canonical-ul nested corect și **nu** intră în `sitemap.xml`, dar rămâne vizibilă în navigație, pe pagina de categorie, în sitemap-ul HTML și la navigare directă. În momentul în care i se atribuie cel puțin un produs activ, ambele comportamente se inversează automat — nu există niciun toggle manual de SEO.
+
+Categoriile de nivel superior rămân indexabile chiar și fără produse directe, fiindcă au copy unic, ierarhie reală și linkuri către colecțiile-copil.
+
+### Metadata
+
+`meta_title` și `meta_description` rămân editabile din admin pentru ambele niveluri. Fallback-uri: titlu `{Nume} | Personalised Gifts | Kattie.uk` pentru categorie și `{Nume} | Kattie.uk` pentru subcategorie; descrierea cade pe `short_description`. Copy-ul furnizat nu este rescris și nu se injectează text SEO repetitiv. Canonical-ul folosește întotdeauna URL-ul nested nou, prin `CanonicalUrl::forPaginator($category->url(), $products)`.
+
+Pagina de produs rămâne neschimbată ca arhitectură canonică: `/products/{slug}`, fără a alege arbitrar una dintre subcategoriile posibile drept părinte. Doar linkurile de categorie de pe pagina de produs și din workspace au trecut la `$category->url()`.
+
+### Sitemap-uri
+
+- **`/sitemap.xml`**: homepage, `/products`, categoriile active de nivel superior, subcategoriile active **care au cel puțin un produs activ**, produsele active și paginile de conținut. Exclude URL-urile `/collections/...`, taxonomia inactivă, subcategoriile goale/noindex și paginile tranzacționale. Apartenența la sitemap se calculează cu o singură interogare pe pivot, nu cu un `exists()` per subcategorie.
+- **`/sitemap`** (HTML): arborele `Shop` complet — cele patru categorii, fiecare cu subcategoriile ei, inclusiv cele goale, fiindcă este și o pagină de navigare pentru client. Lista de produse rămâne într-o coloană separată.
+
 ## 16. Testare și starea verificărilor
 
-Repository-ul conține 35 de fișiere de test Feature, grupate în:
+Repository-ul conține 40 de fișiere de test Feature, grupate în:
 
 - Admin;
 - Artwork;
@@ -567,7 +699,21 @@ Acoperirea verifică, între altele:
 - Stripe Checkout payload, idempotency, redirect/cancel, return race, semnătură, deduplicare, stări async, protecție cross-order și refund.
 - Order Support: navigare/branding, ownership autentificat (fără preselecție cross-user, fără acceptare de order_number manipulat), verificare guest (GuestContext sau email, mesaj generic identic la orice eșec, fără enumerare), persistență (referință unică, status implicit Open, email snapshot, mesaj text simplu), poză (JPEG/PNG/WebP acceptate, tip/dimensiune invalidă respinsă, cheie de stocare aleatorie, acces cross-request blocat), admin (acces restricționat la is_admin, listare, inspecție, tranziții de status fără impact pe OrderStatus) și regresie (nicio mutație de totaluri/adresă/status/payment/print-asset/fulfilment la trimiterea unui suport).
 
+Acoperirea taxonomiei ierarhice (această fază):
+
+- `tests/Feature/Catalogue/CategoryHierarchyTest.php` (11 teste): `parent_id` null la nivel superior, apartenența copiilor, respingerea nivelului trei, self-parent, reparentarea unei categorii cu copii, ștergerea unei categorii cu copii, slug rezervat respins la top-level dar permis la subcategorie, slug malformat respins, ordonarea pe ambele niveluri, un produs în mai multe subcategorii leaf cu un singur canonical, generarea URL-urilor pe fiecare nivel;
+- `tests/Feature/Catalogue/CatalogueRoutingTest.php` (12 teste): rezolvarea `/{categorie}` și `/{categorie}/{subcategorie}`, 404 pentru combinația greșită părinte/copil, 404 pentru subcategorie cerută la nivel superior, 404 pentru taxonomie inactivă (părinte sau copil), faptul că `/products`, `/products/{slug}`, `/account`, `/cart`, `/checkout`, `/order-support`, `/login`, `/register`, `/sitemap`, `/sitemap.xml`, `/faq`, `/artwork/*`, `/admin/login` și `/up` nu sunt capturate de catalog, cele trei redirecturi 301 legacy, redirectul de la prefixul legacy pentru slug-uri curente, 404 pentru un `/collections/...` inexistent, absența oricărui canonical `/collections/...`, plus două teste de gardă care verifică automat sincronizarea `ReservedSlugs` cu tabela de rutare și cu `public/`;
+- `tests/Feature/Catalogue/CatalogueNavigationTest.php` (11 teste): headerul expune toate categoriile și subcategoriile, categoriile fără produse rămân vizibile, taxonomia inactivă nu apare, meniul mobil expune aceeași taxonomie accesibil, footerul listează cele patru categorii fără subcategorii, pagina de categorie randează copy-ul exact și copiii fără grilă ruptă, produsele featured sunt deduplicate, subcategoria randează copy, breadcrumb și linkuri către surori, colecția goală arată starea prietenoasă, conținutul editorial apare doar când există, iar navigația nu produce N+1;
+- `tests/Feature/Catalogue/CatalogueSeoTest.php` (rescris, 6 teste): metadata/canonical/paginare pe subcategorie, fallback-urile de titlu și descriere pe ambele niveluri, conținutul exact al `sitemap.xml`, tranziția automată `noindex,follow` → indexabil la atribuirea unui produs, ierarhia din sitemap-ul HTML;
+- `tests/Feature/Admin/ProductCategoryAdminTest.php` (10 teste): restricțiile de acces rămân intacte, crearea unei categorii top-level și a unei subcategorii, selectorul de părinte oferă doar top-level și se exclude pe sine, slug rezervat respins ca eroare de formular, o categorie cu copii nu poate deveni subcategorie, preview-ul de URL reflectă ierarhia, tabelul afișează Type și calea canonică, iar selectorul de categorii al produsului folosește etichete `Părinte — Copil` și doar recorduri leaf.
+
 Verificări recente trecute:
+
+- suita completă după această fază: **300 teste trecute, 1949 assertions**, cu 5 eșecuri preexistente (față de 251 trecute / 1729 assertions și 6 eșecuri preexistente înainte de fază);
+- `npm run build`: 1607 module, build reușit;
+- `php artisan migrate:fresh --seed` urmat de `php artisan db:seed`: taxonomia rămâne 4 categorii + 20 subcategorii, fără duplicate;
+- migrarea `parent_id` verificată explicit pe o bază populată: rândurile din `product_category` supraviețuiesc (5 înainte, 5 după);
+- `tests/Feature/Commerce` integral verde, deci basket/checkout/payment/account/order support nu au fost afectate.
 
 - `tests/Feature/Commerce/OrderSupportTest.php` + `tests/Feature/Admin/OrderSupportAdminTest.php`: 42 teste, 92 assertions;
 
@@ -584,11 +730,19 @@ Verificări recente trecute:
 - prompturile AI v5 și provider integration;
 - workspace/progress polling.
 
-Există assertions vechi, de markup exact, cunoscute ca nealiniate cu UI-ul curent, plus o problemă separată de lineage la regenerare:
+Există assertions vechi, de markup exact, cunoscute ca nealiniate cu UI-ul curent, plus o problemă separată de lineage la regenerare. Cele **5 eșecuri preexistente rămase**, verificate individual că au aceeași cauză ca înainte de această fază (niciunul nu ține de taxonomie):
 
-- un test caută exact markup-ul `750 ml / £16.50` într-o structură veche;
-- un test caută exact `class="lg:sticky lg:top-24 lg:self-start"`, dar elementul curent are clase responsive suplimentare.
-- testul de regenerare nelimitată primește `parent_generation_id=null` în locul generației anterioare.
+| Test | Cauză |
+|---|---|
+| `ArtworkSessionTest > regeneration is immutable and has no generation limit` | `parent_generation_id=null` în locul generației anterioare |
+| `ComposedDesignTest > artwork page uses variant specific supplier examples…` | caută exact markup-ul `750 ml / £16.50` într-o structură veche |
+| `ProductArtworkWorkspaceTest > start redirects to product…` | caută exact `bg-black/80`, înlocuit cu CSS explicit `rgba(0,0,0,.8)` |
+| `ProductArtworkWorkspaceTest > bottle product starts with colour name photo…` | caută exact `:disabled="submitting \|\| !photoReady() \|\| !nameValue.trim()"` |
+| `StationeryPencilTinProductTest > seeding is idempotent and workspace left column is sticky…` | caută exact `class="lg:sticky lg:top-24 lg:self-start"`, dar elementul are clase responsive suplimentare |
+
+Al șaselea eșec preexistent (`CatalogueSeoTest > category metadata canonical breadcrumbs and pagination are correct`) **a fost reparat** în această fază: testul a fost rescris pentru arhitectura nouă, iar assertion-ul `assertDontSee('utm_source')` — care era greșit, fiindcă linkurile de paginare poartă legitim query string-ul — a fost înlocuit cu o verificare precisă că parametrul de tracking nu ajunge în `canonical`.
+
+Acestea sunt datorii de test, nu erori demonstrate ale fluxurilor funcționale.
 
 Acestea sunt datorii de test, nu erori demonstrate ale fluxurilor funcționale. Suita completă trebuie rulată și aceste expectations actualizate când se face curățarea testelor.
 
@@ -645,7 +799,12 @@ php artisan prodigi:quote <SKU>
 11. Schimbarea emailului din My Details nu declanșează verificare de email (consistent cu punctul 8).
 12. Order Support nu trimite niciun email (confirmare client sau notificare admin) — Phase 5 va adăuga arhitectura de email; câmpurile `contact_email`/`reference`/relația cu `Order`/`status` sunt deja pregătite pentru asta.
 13. Order Support nu creează automat o comandă de înlocuire, nu rambursează și nu declanșează nicio acțiune TreatPod — orice rezultat rămâne o decizie de admin/om.
-14. Nu există istoric de Order Support în `My Account` (deliberat, scop redus pentru această fază) — singurul punct de acces pentru client este CTA-ul de pe detaliul comenzii/confirmare/nav.
+14. **PRODUSELE NOI NU AU FOST ÎNCĂ IMPLEMENTATE.** Această fază a livrat exclusiv arhitectura de informație a catalogului: taxonomie, admin, storefront, navigație și rutare/SEO. Nu au fost create produse noi, variante, prețuri, dimensiuni de tipar, mapping-uri de furnizor, template-uri de print sau înregistrări de fulfilment. Produsele planificate (Personalised Kids Water Bottle 750 ml, Personalised Lunch Box, Personalised Pencil Tin, Personalised School Backpack, Personalised Lunch Bag, Personalised Storybook Wall Print A3, Framed Storybook Portrait A3, Personalised Desk Portrait, Personalised Keepsake Box, Personalised Pet Portrait, Personalised Pet Bowl, Personalised Pet Christmas Ornament) aparțin fazei următoare de catalog/produse.
+15. 17 dintre cele 20 de subcategorii sunt momentan goale, deci `noindex,follow` și în afara `sitemap.xml`. Devin automat indexabile și intră în sitemap la primul produs activ atribuit — fără intervenție manuală. Până atunci **nu sunt destinații pregătite pentru campanii Google Ads**.
+16. `Gifts & Occasions` nu are produse proprii; subcategoriile ei vor redistribui produse din celelalte familii în faza următoare, prin pivotul many-to-many existent, fără duplicarea produselor.
+17. Imaginea de categorie este **opțională** și nu blochează publicarea. Nu au fost create assets de marketing: în acest moment doar subcategoriile care conțin deja un produs afișează o imagine reală (moștenită din primul produs), restul afișează blocul neutru. Încărcarea imaginilor dedicate din admin rămâne o sarcină de conținut.
+18. Nu există redirect automat pentru slug-urile de categorie schimbate din admin (echivalentul `ProductSlugRedirect` pentru categorii). Redenumirea unui slug de categorie rupe URL-ul vechi; harta din `config/catalogue.php` acoperă doar migrarea legacy `/collections/...`.
+19. Nu există istoric de Order Support în `My Account` (deliberat, scop redus pentru această fază) — singurul punct de acces pentru client este CTA-ul de pe detaliul comenzii/confirmare/nav.
 
 ## 19. Protocol obligatoriu de actualizare
 
@@ -786,3 +945,83 @@ Documentul trebuie să descrie codul care există efectiv. Funcțiile planificat
 - teste noi: `tests/Feature/Commerce/OrderSupportTest.php` + `tests/Feature/Admin/OrderSupportAdminTest.php` (42 teste, 92 assertions); adăugat `database/factories/OrderFactory.php` (nu exista anterior) pentru a reduce duplicarea fixture-urilor de test; suita completă a aplicației: 251 teste trecute, 1729 assertions, aceleași 6 eșecuri preexistente nelegate (verificate individual că sunt identice cu cele dinaintea acestei faze);
 - curățare de brand: corectate mențiunile rămase „Cattie”/„Cattie.uk” în copy real customer-facing și documentație — `config/information-pages.php` (inclusiv adresele `support@cattie.uk` → `support@kattie.uk`), `config/commercial-policies.php`, `config/product-assets.php` (alt text), `database/seeders/CatalogueSeeder.php` (nume/descrieri/meta produse și categorii), `README.md`; nu au fost redenumite identificatori de cod/date istorice (`GuestContext::COOKIE = 'cattie_guest_token'`, prefixul `CAT-` al numărului de comandă, numele fișierului de test `CattieAdminV1Test.php`) — riscul de renaming depășea beneficiul pentru această fază;
 - modificări de design cerute ulterior în aceeași fază: token-ul `--color-coral` schimbat la `#fc5997`; dropdown-uri hover pe desktop pentru Shop (categorii active cu produse), Order Support (Track Order + Something wrong?) și My Account (My Orders/My Details/Sign out, click pe etichetă navighează direct la `/account`), cu închidere reciprocă (un singur dropdown deschis la un moment dat) și echivalent pe mobil; secțiunea „How it works” de pe homepage rescrisă cu imaginile reale din `public/images/how/{01..04}.png`, lățime completă de ecran, layout număr+titlu sus / text+imagine jos; secțiunea „Choose the feeling” de pe homepage afișează acum imaginile reale ale stilurilor de artwork; crescute timeout-urile Google Places (`GOOGLE_PLACES_TIMEOUT=10`, `GOOGLE_PLACES_CONNECT_TIMEOUT=6`) după erori intermitente de conexiune observate în logs.
+
+### 16 august 2026 — arhitectura canonică de informație a catalogului (taxonomie, admin, storefront, SEO)
+
+- **NU au fost create produse noi.** Această fază a livrat exclusiv arhitectura de informație: taxonomie ierarhică, admin, template-uri de storefront, navigație și rutare/SEO. Produsele planificate aparțin fazei următoare;
+- `product_categories` a devenit ierarhic prin migrarea `2026_08_16_000100_add_parent_id_to_product_categories`: `parent_id` nullable self-referențial, `cascadeOnUpdate`/`restrictOnDelete`, index `(parent_id, sort_order)`. Migrarea declară explicit `public $withinTransaction = false` — pe SQLite adăugarea unui foreign key se implementează prin reconstrucția tabelei, iar `PRAGMA foreign_keys` este ignorat în interiorul unei tranzacții, ceea ce ar fi făcut ca `drop table` intermediar să cascadeze și să șteargă **toate** rândurile din `product_category` pe o bază deja populată; verificat explicit că pivotul supraviețuiește (5 rânduri înainte, 5 după);
+- `ProductCategory` a primit `parent()`, `children()`, `scopeTopLevel()`, `scopeSubcategories()`, `isTopLevel()`, plus `url()` și `urlFor()` ca **unică** sursă de generare a URL-urilor de categorie; niciun host hardcodat și nicio concatenare manuală de căi în Blade;
+- invariantele ierarhiei (adâncime maximă 2, fără self-parent, fără reparentarea unei categorii cu copii, fără ștergerea unei categorii cu copii, slug rezervat interzis la top-level, format de slug) sunt validate în trei straturi: formularul Filament (erori inline, stratul pentru utilizator), `ProductCategoryObserver` (plasă de siguranță pentru seedere/CLI/tinker, aruncă `InvalidCategoryHierarchyException`) și foreign key-ul din bază;
+- rutare nouă: `/{category-slug}` și `/{category-slug}/{subcategory-slug}`, declarate ultimele în `routes/web.php`, cu constrângeri regex construite din `App\Support\ReservedSlugs`, astfel încât rutele fixe nu pot fi capturate niciodată — routerul nu face match și trece mai departe, în loc să rezolve și să dea 404. `ReservedSlugs` este `const` (compatibil cu `route:cache`) plus `SLUG_PATTERNS` pentru prefixul hash-uit al Livewire; două teste de gardă verifică automat sincronizarea cu tabela de rutare și cu `public/`;
+- validarea de ownership pentru subcategorii este structurală (copilul este căutat prin părinte), deci `/pets-family/personalised-water-bottles-for-kids` întoarce 404, nu redirect;
+- `/collections/{slug}` a fost repurposat ca redirect 301 (`LegacyCollectionRedirectController`): hartă explicită în `config/catalogue.php` → căutare după slug → 404; ținta este mereu `$category->url()`, deci nu apar lanțuri de redirect. Niciun `/collections/...` nu mai este canonic și niciunul nu intră în `sitemap.xml`;
+- taxonomia canonică seed-uită idempotent de `CategoryTaxonomySeeder`: 4 categorii de nivel superior și 20 de subcategorii, cu copy-ul exact furnizat, stocat în bază (nu în Blade);
+- categoriile legacy `School & Lunch`, `Kids Drinkware`, `School Accessories` au fost eliminate prin secvența migrează → detașează explicit pivoturile rămase → șterge, fără a depinde de comportamentul de cascade al foreign key-ului; niciun produs nu a fost șters sau reconfigurat;
+- șase produse existente au fost mutate în subcategoriile leaf evidente (bottle, lunchbox, pencil tin, wall print, pet portrait, family print); mug-ul și cushion-ul au rămas deliberat neatribuite;
+- storefront: template nou de Categorie (`categories/category.blade.php`) și template refăcut de Colecție (`categories/show.blade.php`), cu breadcrumb-uri corecte pe fiecare nivel, `BreadcrumbList` JSON-LD, `ItemList` doar când există produse, stare prietenoasă pentru colecțiile goale și linkuri interne către subcategoriile-surori;
+- regula SEO pentru colecții goale: subcategorie activă fără produse active → `robots: noindex,follow`, canonical nested propriu, exclusă din `sitemap.xml`, dar vizibilă în navigație, pe pagina de categorie, în sitemap-ul HTML și la navigare directă; se inversează automat la primul produs atribuit, fără toggle manual;
+- navigația a fost mutată pe `App\Support\CatalogueNavigation::topLevelWithChildren()` (două interogări, fără N+1, cu back-link părinte pentru a evita interogarea de fallback din `url()`); condiția „ascunde categoriile fără produse” a fost **eliminată** deliberat, ca structura să fie navigabilă înainte de importul produselor;
+- meniu desktop transformat în mega-menu pe patru coloane cu `Shop all`, meniu mobil transformat în acordeon pe două niveluri cu atribute ARIA corecte, coloană `Shop` nouă în footer, secțiune nouă de categorii pe homepage și chip-uri „Shop by category” comutate pe cele patru categorii de nivel superior; branding, căutare, Order Support, Account și Basket au rămas neatinse;
+- sitemap XML restrâns la categoriile de nivel superior active plus subcategoriile active cu cel puțin un produs activ (apartenența calculată cu o singură interogare pe pivot); sitemap HTML transformat în arbore complet, inclusiv subcategoriile goale;
+- admin Filament: formular de categorie complet (parent searchable limitat la top-level, exclus pe sine, dezactivat + `dehydrated(false)` când are copii, `->rule()` pentru fiecare invariantă, preview read-only al URL-ului canonic prin `route()`), tabel cu Type/Parent/cale canonică/număr de produse/filtre și ștergere blocată cu notificare pentru categoriile cu copii; selectorul de categorii al produsului oferă doar recorduri leaf, cu etichete `Părinte — Copil`;
+- pagina de produs și fluxul de artwork au rămas **funcțional neschimbate**: Phase A (Create) și Phase B (Preview & Approve), upload, generare, workspace, selecție de variantă, personalizare, preview, regenerare, aprobare și adăugare în basket. Singura modificare a fost trecerea linkurilor de categorie pe `$category->url()`; canonicalul produsului rămâne `/products/{slug}`, fără a alege arbitrar un părinte;
+- teste noi: `CategoryHierarchyTest` (11), `CatalogueRoutingTest` (12), `CatalogueNavigationTest` (11), `ProductCategoryAdminTest` (10); `CatalogueSeoTest` și `ProductCategoryTest` rescrise pentru arhitectura nouă; `LunchboxProductTest` și `StationeryPencilTinProductTest` actualizate la noile subcategorii;
+- suita completă: **300 teste trecute, 1949 assertions**, cu 5 eșecuri preexistente verificate individual că au aceeași cauză ca înainte (lineage de regenerare artwork și assertions de markup vechi); al șaselea eșec preexistent, din `CatalogueSeoTest`, a fost reparat în cadrul rescrierii. `npm run build` reușit.
+
+### 16 august 2026 — imagini pe cardurile de subcategorie
+
+- adăugată migrarea `2026_08_16_000200_add_image_to_product_categories` (`image_disk`, `image_storage_key`, `image_alt_text`), cu aceeași convenție ca `product_images`;
+- adăugat `ProductCategory::cardImage()`, care rezolvă cascada imagine de categorie → imaginea principală a primului produs activ din categorie → `null` (bloc neutru), fără să emită vreodată `<img src="">`;
+- extras componentul `resources/views/components/category-card.blade.php`: pe desktop text 50% stânga / imagine 50% dreapta cu `object-fit: cover`, imaginea ascunsă pe mobil, descrierea `line-clamp-4` și imaginea plafonată la `max-h-[12.25rem]` (titlu + patru rânduri + `Explore`), astfel încât cardurile dintr-un rând nu se pot întinde reciproc;
+- grila de subcategorii de pe pagina de categorie a trecut de la trei la două coloane, ca imaginea de 50% să aibă spațiu real;
+- adăugat `FileUpload` opțional în formularul Filament de categorie (secțiunea „Card image”), cu `image_disk` sincronizat automat și helper text care explică fallback-ul;
+- teste noi în `CatalogueNavigationTest`: prioritatea imaginii de admin față de imaginea de produs, ascunderea pe mobil, plafonarea înălțimii și absența unui `<img>` gol când nu există nicio imagine;
+- suita completă: **302 teste trecute, 1959 assertions**, aceleași 5 eșecuri preexistente; `npm run build` reușit.
+
+### 16 august 2026 — fundaluri pe homepage
+
+- secțiunea „How it works” a primit un fundal discret prin clasa nouă `.home-how-it-works` (gradient vertical `#fffaf3 → #f6ebe0 → #fffaf3`), definită în `@layer components` alături de celelalte componente;
+- cardurile de categorie de pe homepage au devenit tile-uri cu imagine de fundal: `<img>` absolut cu `object-cover`, peste el `.category-tile-overlay` (`rgba(0,0,0,.8)`, aceeași convenție explicită folosită deja pentru overlay-ul de artwork), iar deasupra titlul și descrierea în alb, cu `Explore →` în coral; imaginea este marcată `alt=""` + `aria-hidden`, fiind decorativă;
+- generate patru texturi abstracte din paleta brandului (`school-everyday`, `memories-keepsakes`, `pets-family`, `gifts-occasions`), versionate în `database/seeders/assets/categories/` și publicate pe disk-ul `public` de `CategoryTaxonomySeeder`; seeder-ul nu suprascrie niciodată o imagine încărcată din admin. Nu sunt fotografii — pot fi înlocuite oricând din Filament;
+- corectată o capcană de selecție de coloane în `CatalogueNavigation`: fără `image_disk`/`image_storage_key`/`image_alt_text` în lista de `select`, tile-urile de pe homepage rămâneau fără imagine (exact aceeași clasă de problemă ca `id`/`parent_id`);
+- teste noi în `CatalogueNavigationTest`: tile-urile afișează imaginea categoriei sub overlay, toate cele patru primesc overlay-ul, imaginea este decorativă, iar secțiunea „How it works” are fundal;
+- suita completă: **304 teste trecute, 1967 assertions**, aceleași 5 eșecuri preexistente; `npm run build` reușit.
+
+### 16 august 2026 — ajustări vizuale homepage
+
+- **Constatare importantă:** un overlay plat `rgba(0,0,0,.8)` peste tile-urile de categorie ștergea complet imaginea — tile-ul devenea un dreptunghi aproape uniform, indiferent de fotografie. Verificat prin compunerea efectivă a imaginii cu overlay-ul, nu prin estimare. `.category-tile-overlay` a devenit gradient (`30% sus → 45% → 78% → 88% jos`): fotografia rămâne vizibilă în partea superioară, iar titlul, descrierea și `Explore →` din treimea inferioară păstrează contrast complet;
+- texturile de categorie au fost regenerate cu contrast mult mai mare (highlight luminos + umbră adâncă per paletă), fiindcă degradeurile pastelate inițiale se aplatizau sub orice întunecare; fiecare categorie are acum o identitate cromatică clar distinctă (teal, warm rose, olive, magenta);
+- banda `.home-how-it-works` a fost întărită (`cream → #f2d9c6 → cream`), iar cardurile de pas au devenit transparente — fără `bg-white`, fără `border-ink/5`, fără `shadow-sm`;
+- imaginile de pas (`h-40 w-2/3 rounded-2xl object-cover`) au primit `mix-blend-multiply`, astfel încât fundalul lor alb se topește în banda secțiunii;
+- suita completă: **304 teste trecute, 1967 assertions**, aceleași 5 eșecuri preexistente; `npm run build` reușit.
+
+### 17 august 2026 — homepage cu cercuri, pagina de categorie aliniată la `/products`
+
+- secțiunea „Where would you like to start?” a fost refăcută: fiecare categorie este acum un **cerc mare** (`aspect-square` + `rounded-full`, `object-cover`) cu numele categoriei dedesubt la aceeași dimensiune (`font-display text-2xl`); descrierile și overlay-ul au dispărut, iar `.category-tile-overlay` a fost eliminată din CSS ca să nu rămână cod mort. Pe mobil grila este pe **două coloane** (`grid-cols-2`), pe desktop patru;
+- `ProductCategory::cardImage()` are acum cascada: imagine încărcată din admin → **fotografie reală de produs** (proprie, iar pentru o categorie de nivel superior și din subcategoriile ei) → textura de brand generată pentru slug → bloc neutru. Texturile nu mai sunt scrise în coloanele de imagine ale categoriei, deci o fotografie reală are prioritate față de un placeholder, iar re-seedarea nu atinge niciodată date din admin;
+- **regresie de performanță prinsă de propriul test de N+1 și reparată:** rezolvarea imaginilor interoga produse per categorie. `CatalogueNavigation::hydrateProductImages()` face acum o singură interogare pentru tot arborele. Testul a fost întărit: nu mai verifică un prag arbitrar, ci demonstrează că numărul de interogări este **identic** când taxonomia se triplează;
+- corectat un `BadMethodCallException` pe homepage: `flatMap()` întoarce un `Support\Collection`, nu `Eloquent\Collection`, deci `modelKeys()` nu există — cheile se iau acum explicit;
+- **pagina de categorie** (`/school-everyday`) folosește exact layout-ul de la `/products`: eyebrow, `H1`, intro, apoi subcategoriile ca pills orizontale sticky, urmate de grila de produse când există. Componenta `category-card` a fost ștearsă, nemaifiind folosită. **Pagina de subcategorie a rămas complet neschimbată**;
+- „One photo. Four little steps.”: carduri transparente, imagini cu `mix-blend-multiply`, bandă `.home-how-it-works` mai pronunțată;
+- „Choose the feeling”: capetele împinse spre dreapta (`pr-3` + `ml-auto`) și gap redus la `gap-2`, ca boxul de text să câștige lățime;
+- hero pe mobil: titlul folosește dimensiune fluidă (`text-[10vw]`) ca să ocupe consecvent trei rânduri pe orice lățime de ecran, iar conținutul este aliniat sus (`items-start` + `pt-0`), eliminând spațiul gol de deasupra eyebrow-ului;
+- suita completă: **304 teste trecute, 1967 assertions**, aceleași 5 eșecuri preexistente; `npm run build` reușit.
+
+### 17 august 2026 — titlul și introul subcategoriei vizibile pe mobil
+
+- pagina de subcategorie avea întregul bloc de antet `hidden sm:block`, deci pe mobil dispăreau **și H1-ul, și textul introductiv** — rămânea doar grila de produse. Comportament moștenit din template-ul vechi de categorie;
+- corectat: blocul este vizibil pe toate dimensiunile, cu tipografie adaptată (`text-2xl` pe mobil, `text-6xl` de la `sm` în sus); doar eyebrow-ul cu numele categoriei părinte rămâne ascuns pe mobil, la fel ca pe `/products` — contextul părinte este oricum prezent în breadcrumb;
+- motivul este funcțional, nu estetic: subcategoriile sunt landing pages pentru SEO și Google Ads, iar Google indexează mobile-first — un H1 ascuns cu `display:none` în versiunea mobilă contrazice exact scopul pentru care au fost construite paginile, iar majoritatea vizitatorilor nu ar vedea nicio explicație a paginii;
+- adăugat testul `headings and intro copy are not hidden on mobile`, care verifică pe ambele niveluri că nici containerul antetului, nici `H1` nu poartă clasa `hidden` și că `short_description` este randat;
+- suita completă: **305 teste trecute, 1979 assertions**, aceleași 5 eșecuri preexistente; `npm run build` reușit.
+
+### 17 august 2026 — intro cu „See more” pe mobil
+
+- adăugat componentul `resources/views/components/expandable-text.blade.php`, folosit pentru textul introductiv de pe paginile de categorie și subcategorie: pe mobil copy-ul este limitat la **două rânduri**, cu „… See more” inline la capătul rândului al doilea; la click se afișează textul complet, urmat de „See less”. Ambele controale sunt `font-semibold` (două trepte peste greutatea normală a textului);
+- controalele apar **numai când textul chiar depășește două rânduri** — un intro scurt nu primește un buton inutil; măsurarea se reface la `resize`, fiindcă limitarea depinde de breakpoint;
+- pe desktop (`sm` în sus) textul este afișat integral, fără niciun control;
+- „… See more” este poziționat absolut peste capătul rândului al doilea, cu clasa `.see-more-fade` (gradient spre alb) ca textul să nu pară că intră direct în el;
+- **impact SEO: niciunul.** `line-clamp` este exclusiv prezentațional (`overflow: hidden`), deci textul rămâne integral în DOM și randat — spre deosebire de `display: none`. `H1`, `title` și `meta_description` (care cade tot pe `short_description`) sunt neatinse;
+- limitarea este aplicată ca **clasă statică**, nu prin binding Alpine: legată de Alpine, textul s-ar fi randat complet și s-ar fi colapsat după pornirea JS-ului, producând layout shift la fiecare încărcare (semnal Core Web Vitals). Există un test dedicat care blochează revenirea la varianta legată de JS;
+- test nou `the mobile see more toggle never removes copy from the html`, care verifică prezența integrală a textului în markup, fallback-ul de `meta_description` și faptul că limitarea rămâne statică;
+- suita completă: **306 teste trecute, 1986 assertions**, aceleași 5 eșecuri preexistente; `npm run build` reușit.

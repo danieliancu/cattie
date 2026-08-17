@@ -37,7 +37,7 @@ class StationeryPencilTinProductTest extends TestCase
         $this->assertSame(['Blue', 'Pink', 'Silver'], $variants->pluck('name')->all());
         $this->assertSame(['CATTIE-PENCIL-TIN-BLUE', 'CATTIE-PENCIL-TIN-PINK', 'CATTIE-PENCIL-TIN-SILVER'], $variants->pluck('sku')->all());
         $this->assertSame(['blue', 'pink', 'silver'], $variants->pluck('options')->pluck('colour')->all());
-        $this->assertSame(['school-lunch', 'school-accessories'], $product->categories->pluck('slug')->all());
+        $this->assertSame(['personalised-pencil-tins'], $product->categories->pluck('slug')->all());
         $this->assertSame('stationery-pencil-tin-v1', $product->designTemplate->key);
         $this->assertSame('blue', $product->preview_configuration['default_variant_options']['colour']);
 
@@ -128,8 +128,7 @@ class StationeryPencilTinProductTest extends TestCase
             ->assertSee('products/personalised-stationery-pencil-tin/catalogue/silver/', false)
             ->assertDontSee('TreatPod')->assertDontSee('SUBSTATIONERYTIN');
         $this->get(route('products.index'))->assertOk()->assertSee('Personalised Stationery &amp; Pencil Tin', false);
-        $this->get(route('categories.show', 'school-accessories'))->assertOk()->assertSee('Personalised Stationery &amp; Pencil Tin', false);
-        $this->get(route('categories.show', 'school-lunch'))->assertOk()->assertSee('Personalised Stationery &amp; Pencil Tin', false);
+        $this->get('/school-everyday/personalised-pencil-tins')->assertOk()->assertSee('Personalised Stationery &amp; Pencil Tin', false);
         $this->get(route('sitemap.xml'))->assertOk()->assertSee('/products/personalised-stationery-pencil-tin');
     }
 
