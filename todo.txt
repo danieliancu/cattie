@@ -1,15 +1,56 @@
-| Ordine | Etapă                    | Status                                    |
-| -----: | ------------------------ | ----------------------------------------- |
-|  **1** | 💳 Stripe                | 🟡 **Cod gata → test sandbox/live setup** |
-|  **2** | 👤 Customer Account      | ✅ **DONE**                                |
-|  **3** | 📦 Order History         | ✅ **DONE**                                |
-|  **4** | 🆘 Order Support         | ⏭️ **NEXT**                               |
-|  **5** | ✉️ Emails                | ⬜                                         |
-|  **6** | 🖨️ PrintAsset            | 🟡 model existent / pipeline lipsă        |
-|  **7** | 🏭 TreatPod outbound     | ⬜ așteptăm contractul API complet         |
-|  **8** | 🚚 Fulfilment / Tracking | 🟡 webhook receiver existent              |
-|  **9** | 🔐 Production hardening  | ⬜ + unele fundații deja existente         |
-| **10** | ✅ Final QA              | ⬜                                         |
+FOUNDATION / COMMERCE FLOW       ██████████  foarte avansat
+→ Fluxul de bază: produs → basket → checkout → payment → confirmation funcționează.
+------------------------------------------------------------
+
+AI / ARTWORK                     ██████████  foarte avansat
+→ Upload foto, generare AI, preview pe produs, ajustare, regenerare și aprobare.
+------------------------------------------------------------
+
+CATALOGUE ARCHITECTURE           ██████████  gata
+→ Structura Category → Subcategory → Product, URL-uri SEO, admin, menu și sitemap sunt implementate.
+------------------------------------------------------------
+
+CUSTOMER ACCOUNT                 ██████████  gata
+→ Login/register, My Account, My Orders, Order Detail și My Details sunt funcționale.
+------------------------------------------------------------
+
+ORDER SUPPORT                    ██████████  gata
+→ Clientul poate cere ajutor pentru o comandă, iar cererea ajunge în admin pentru procesare manuală.
+------------------------------------------------------------
+
+REAL PRODUCT CATALOGUE           ███░░░░░░░  următorul pas
+→ Trebuie adăugate produsele reale cu variante, prețuri, imagini, print specs și încadrarea în subcategorii.
+------------------------------------------------------------
+
+EMAILS                           ░░░░░░░░░░  lipsă
+→ Trebuie implementate emailurile automate: order confirmation, support acknowledgement și ulterior shipping/tracking.
+------------------------------------------------------------
+
+PRINTASSET PIPELINE              ███░░░░░░░  model există, flow nu
+→ Trebuie transformat artwork-ul aprobat într-un PrintAsset final, validat și pregătit efectiv pentru tipografie.
+------------------------------------------------------------
+
+TREATPOD AUTOMATION              ██░░░░░░░░  inbound parțial, outbound lipsă
+→ Trebuie trimisă automat comanda și artwork-ul la TreatPod și procesate statusurile/tracking-ul primit înapoi.
+------------------------------------------------------------
+
+PRODUCTION HARDENING             █████░░░░░  parțial
+→ Mai trebuie configurare live, retry-uri, monitoring, logging, cleanup, securitate și verificări finale de producție.
+------------------------------------------------------------
+
+
+
+
+
+Mută randarea print-ready (full-res) din add-to-basket într-un job de queue
+Move full-resolution ComposedDesign render off the web request into a queued job
+
+Scop:
+- la add-to-basket se face doar verificarea fingerprint + adăugarea în coș;
+- randarea PNG-ului de print (300 DPI) se face într-un job de queue, cu garanția că fișierul de print există înainte de fulfilment + teste actualizate.
+
+
+
 
 
 

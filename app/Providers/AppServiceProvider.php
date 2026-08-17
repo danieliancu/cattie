@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Contracts\AddressLookupProvider;
 use App\Contracts\BackgroundRemovalRunner;
 use App\Contracts\ImageGenerationProvider;
+use App\Contracts\ImageUpscaler;
 use App\Contracts\PaymentProvider;
 use App\Domain\Cart\Actions\ResolveGuestCart;
 use App\Domain\Payments\Contracts\ShippingResolver;
@@ -28,6 +29,7 @@ use App\Providers\Payments\StripePaymentProvider;
 use App\Integrations\Stripe\SdkStripeGateway;
 use App\Integrations\Stripe\StripeGateway;
 use App\Services\LocalBackgroundRemovalRunner;
+use App\Services\LocalImageUpscaler;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use RuntimeException;
@@ -41,6 +43,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->bind(StripeGateway::class, SdkStripeGateway::class);
         $this->app->bind(BackgroundRemovalRunner::class, LocalBackgroundRemovalRunner::class);
+        $this->app->bind(ImageUpscaler::class, LocalImageUpscaler::class);
         $this->app->bind(ImageGenerationProvider::class, fn () => match (config('artwork.provider')) {
             'openai' => new OpenAiImageGenerationProvider,
             'fake' => new FakeImageGenerationProvider,

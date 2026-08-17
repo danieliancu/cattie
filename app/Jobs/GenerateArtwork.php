@@ -14,6 +14,7 @@ use App\Exceptions\ImageGenerationException;
 use App\Models\Generation;
 use App\Services\AiGenerationCostCalculator;
 use App\Services\BackgroundRemovalProcessor;
+use App\Services\CharacterUpscaleProcessor;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -86,6 +87,22 @@ class GenerateArtwork implements ShouldBeUnique, ShouldQueue
             }
             $generation->artworkSession->update(['processing_stage' => ArtworkProcessingStage::RemovingBackground]);
             $processed = ($backgroundRemoval ?? app(BackgroundRemovalProcessor::class))->process($result->contents, $requirements);
+
+            // Wall-print characters print large (A3/A2). Raise the transparent character to a
+            // real high resolution before compositing, so it stays crisp at print size rather
+            // than being a bicubic blow-up of the ~1024px AI output.
+            if (($generation->artworkSession->product->artwork_requirements['composition_target'] ?? null) === 'wall_print') {
+                $target = $this->wallPrintCharacterTarget($generation);
+                if ($target > 0) {
+                    $processed['contents'] = app(CharacterUpscaleProcessor::class)->process($processed['contents'], $target);
+                    $upscaled = @getimagesizefromstring($processed['contents']);
+                    if ($upscaled !== false) {
+                        $processed['width'] = $upscaled[0];
+                        $processed['height'] = $upscaled[1];
+                    }
+                }
+            }
+
             $generation->artworkSession->update(['processing_stage' => ArtworkProcessingStage::PreparingPreview]);
 
             $previewImage = @imagecreatefromstring($processed['contents']);
@@ -161,8 +178,25 @@ class GenerateArtwork implements ShouldBeUnique, ShouldQueue
             }
             $generation->update(['status' => GenerationStatus::Failed, 'failure_reason' => 'Unexpected generation failure.', 'failure_category' => 'internal', 'provider_error_code' => null, 'is_retryable' => false, 'completed_at' => now()]);
             $generation->artworkSession->update(['status' => ArtworkSessionStatus::Failed]);
-            Log::error('Artwork generation failed unexpectedly.', ['artwork_session_id' => $generation->artwork_session_id, 'generation_id' => $generation->id, 'exception' => $e::class]);
+            Log::error('Artwork generation failed unexpectedly.', ['artwork_session_id' => $generation->artwork_session_id, 'generation_id' => $generation->id, 'exception' => $e::class, 'message' => $e->getMessage(), 'at' => $e->getFile().':'.$e->getLine()]);
             $analytics->handle('generation_failed', $generation);
+        }
+    }
+
+    /** Target long-edge (px) for a wall-print character, derived from the print area. */
+    private function wallPrintCharacterTarget(Generation $generation): int
+    {
+        try {
+            $resolution = $generation->artworkSession->variant?->requiredPrintResolution('default');
+            $longEdge = max((int) ($resolution['width'] ?? 0), (int) ($resolution['height'] ?? 0));
+            if ($longEdge < 1) {
+                return 0;
+            }
+
+            // The character occupies most of the print height; cap at 4096 to bound cost.
+            return max(1400, min(4096, (int) round($longEdge * 0.8)));
+        } catch (Throwable) {
+            return 2048;
         }
     }
 }

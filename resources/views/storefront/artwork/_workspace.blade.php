@@ -87,12 +87,18 @@
             @php($selectedVariantExamples = $examplesFollowVariant ? $productExamples->where('product_variant_id', $session->product_variant_id)->values() : $productExamples)
             @php($designWidth = $selectedDesign?->width ?? 6)
             @php($designHeight = $selectedDesign?->height ?? 5)
+            @php($isTallPortrait = $designHeight > $designWidth * 1.15)
             @php($resolvedConfig = $selectedDesign?->resolved_manifest['configuration'] ?? $session->product->designTemplate?->definition() ?? [])
             @php($previewSurface = $resolvedConfig['preview_surface'] ?? [])
             @php($surfaceColours = $bottleVariants->mapWithKeys(function ($variant) use ($previewSurface) { $option = $previewSurface['variant_option'] ?? null; $value = $option ? strtolower($variant->options[$option] ?? '') : null; return [$variant->id => ($value ? ($previewSurface['colours_by_variant'][$value] ?? $previewSurface['fallback_colour'] ?? '#f4efe7') : ($previewSurface['colour'] ?? '#f4efe7'))]; }))
             @php($characterConfig = $resolvedConfig['character'] ?? ['x' => .5, 'y' => .5, 'max_width' => .36, 'max_height' => .84])
             @php($characterClip = $resolvedConfig['character_clip'] ?? ['mode' => 'canvas'])
+            @php($characterFit = collect($resolvedConfig['layers'] ?? [])->firstWhere('type', 'generation_asset')['fit'] ?? 'contain')
             @php($savedName = collect($session->personalisation_snapshot)->firstWhere('key', 'name')['value'] ?? '')
+            @php($frameOverlays = $session->product->preview_configuration['frame_overlays'] ?? [])
+            @php($variantFrameOverlays = $bottleVariants->mapWithKeys(function ($variant) use ($frameOverlays) { $frame = strtolower($variant->options['frame'] ?? ''); $asset = $frameOverlays[$frame] ?? null; return [$variant->id => (isset($asset['disk'], $asset['storage_key']) ? \Illuminate\Support\Facades\Storage::disk($asset['disk'])->url($asset['storage_key']) : null)]; }))
+            @php($hasFrameOverlays = collect($variantFrameOverlays)->filter()->isNotEmpty())
+            @php($variantAffectsComposition = (bool) ($resolvedConfig['variant_affects_composition'] ?? true))
 
             <div class="grid min-w-0 sm:mt-8 [&>*]:min-w-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,.72fr)] lg:gap-10" x-data="designWorkspace(@js([
                 'previewMode' => $templated ? 'design' : 'artwork',
@@ -108,6 +114,7 @@
                 'characterWidth' => (float) ($characterConfig['max_width'] ?? .36),
                 'characterHeight' => (float) ($characterConfig['max_height'] ?? .84),
                 'characterClip' => $characterClip,
+                'characterFit' => $characterFit,
                 'scaleMin' => (float) data_get($characterConfig, 'adjustment_limits.scale_min', .1),
                 'scaleMax' => (float) data_get($characterConfig, 'adjustment_limits.scale_max', 50),
                 'offsetXMin' => max((float) data_get($characterConfig, 'adjustment_limits.offset_x_min', -1000), -(float) ($characterConfig['x'] ?? .5)),
@@ -129,42 +136,66 @@
                 'savedNameValue' => $savedName,
                 'variantUrl' => route('artwork.variant', $session->public_id),
                 'nameUrl' => route('artwork.name', $session->public_id),
+                'frameOverlays' => $variantFrameOverlays,
+                'frameOverlayUrl' => $variantFrameOverlays->get($session->product_variant_id),
+                'variantAffectsComposition' => $variantAffectsComposition,
                 'csrf' => csrf_token(),
             ]))">
-                <div class="w-full min-w-0 max-w-full lg:sticky lg:top-24 lg:self-start">
+                <div class="mx-auto w-full min-w-0 lg:sticky lg:top-24 lg:self-start {{ $isTallPortrait ? 'max-w-sm' : 'max-w-full' }}">
                     @if($templated)
-                        <div class="mb-4 flex justify-center gap-2" role="group" aria-label="Preview type">
+                        <div class="relative z-20 mb-4 flex justify-center gap-2" role="group" aria-label="Preview type">
                             <button type="button" @click="previewMode = 'design'" :class="previewMode === 'design' ? 'bg-ink text-white' : 'bg-white text-ink'" class="cursor-pointer rounded-full px-4 py-2 text-sm font-bold">Design</button>
                             <button type="button" @click="previewMode = 'product'" :class="previewMode === 'product' ? 'bg-ink text-white' : 'bg-white text-ink'" class="cursor-pointer rounded-full px-4 py-2 text-sm font-bold">Product</button>
                         </div>
                     @endif
 
                     @if($selectedDesign)
-                        <div x-show="previewMode === 'design'" x-ref="editorCanvas" class="relative w-full min-w-0 max-w-full overflow-hidden rounded-[2.5rem]" style="aspect-ratio: {{ $designWidth }} / {{ $designHeight }}" :style="`aspect-ratio: {{ $designWidth }} / {{ $designHeight }}; background-color: ${surfaceColour}`">
-                            <img x-show="!editable" :src="selectedDesignUrl" alt="Your flat personalised print design" class="h-full w-full object-contain">
-                            <template x-if="editable">
-                                <div class="absolute inset-0">
-                                    <img :src="editorBackgroundUrl" alt="Your personalised design background" class="h-full w-full object-contain">
-                                    <div class="absolute inset-0" :style="characterClipStyle()">
-                                    <div x-ref="characterZone" class="absolute overflow-visible" :style="characterZoneStyle()">
-                                        <div class="absolute inset-0 overflow-visible">
-                                            <div x-ref="characterSelection" @pointerdown.prevent="beginTransform($event, 'move')" :class="transformMode === 'move' ? 'cursor-grabbing' : 'cursor-grab'" class="absolute touch-none border-2 border-dashed border-white/90 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)]" :style="`left:${50 + (offsetX / characterWidth * 100)}%; top:${50 + (offsetY / characterHeight * 100)}%; width:${scale * 100}%; height:${scale * 100}%; transform:translate(-50%,-50%)`">
-                                                <img :src="characterUrl" alt="Your AI character" class="pointer-events-none h-full w-full select-none object-contain">
-                                            <template x-for="handle in ['nw', 'ne', 'w', 'e', 'sw', 'se']">
-                                                <button type="button" @pointerdown.stop.prevent="beginTransform($event, 'scale')" :class="{'-left-3.5 -top-3.5 cursor-nwse-resize': handle === 'nw', '-right-3.5 -top-3.5 cursor-nesw-resize': handle === 'ne', '-left-3.5 top-1/2 -translate-y-1/2 cursor-ew-resize': handle === 'w', '-right-3.5 top-1/2 -translate-y-1/2 cursor-ew-resize': handle === 'e', '-bottom-3.5 -left-3.5 cursor-nesw-resize': handle === 'sw', '-bottom-3.5 -right-3.5 cursor-nwse-resize': handle === 'se'}" class="absolute z-10 flex h-7 w-7 touch-none items-center justify-center rounded-lg border-2 border-white bg-coral text-sm font-black leading-none text-white shadow-lg ring-1 ring-ink/25" :aria-label="`Resize character from ${handle} handle`">
-                                                    <span aria-hidden="true" x-text="({nw: '↖', ne: '↗', w: '↔', e: '↔', sw: '↙', se: '↘'})[handle]"></span>
-                                                </button>
-                                            </template>
+                        <div x-show="previewMode === 'design'" x-ref="editorCanvas" class="relative w-full min-w-0 max-w-full rounded-[2.5rem]" style="aspect-ratio: {{ $designWidth }} / {{ $designHeight }}" :style="`aspect-ratio: {{ $designWidth }} / {{ $designHeight }}; background-color: ${surfaceColour}`">
+                            {{-- Clipped artwork layer: the print image never spills outside the preview area. --}}
+                            <div class="absolute inset-0 overflow-hidden rounded-[2.5rem]">
+                                <img x-show="!editable" :src="selectedDesignUrl" alt="Your flat personalised print design" class="h-full w-full object-contain">
+                                <template x-if="editable">
+                                    <div class="absolute inset-0">
+                                        <img :src="editorBackgroundUrl" alt="Your personalised design background" class="h-full w-full object-contain">
+                                        <div class="absolute inset-0" :style="characterClipStyle()">
+                                            <div class="absolute overflow-visible" :style="characterZoneStyle()">
+                                                <div class="absolute inset-0 overflow-visible">
+                                                    <div class="absolute" :style="`left:${50 + (offsetX / characterWidth * 100)}%; top:${50 + (offsetY / characterHeight * 100)}%; width:${scale * 100}%; height:${scale * 100}%; transform:translate(-50%,-50%)`">
+                                                        <img :src="characterUrl" alt="Your AI character" class="pointer-events-none h-full w-full select-none" :class="characterFit === 'cover' ? 'object-cover' : 'object-contain'">
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
+                                </template>
+                                <img x-show="frameOverlayUrl" :src="frameOverlayUrl" alt="" aria-hidden="true" class="pointer-events-none absolute inset-0 h-full w-full" style="object-fit: fill;">
+                            </div>
+
+                            {{-- Chrome layer: the selection frame and resize handles are NOT clipped, so
+                                 they stay visible even when the artwork is dragged or zoomed past the edge.
+                                 It mirrors the character's transform exactly (same Alpine state). --}}
+                            <template x-if="editable">
+                                <div class="pointer-events-none absolute inset-0 overflow-visible">
+                                    <div class="absolute inset-0" :style="characterClipStyle()">
+                                        <div x-ref="characterZone" class="absolute overflow-visible" :style="characterZoneStyle()">
+                                            <div class="absolute inset-0 overflow-visible">
+                                                <div x-ref="characterSelection" @pointerdown.prevent="beginTransform($event, 'move')" :class="transformMode === 'move' ? 'cursor-grabbing' : 'cursor-grab'" class="pointer-events-auto absolute touch-none border-2 border-dashed border-white/90 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)]" :style="`left:${50 + (offsetX / characterWidth * 100)}%; top:${50 + (offsetY / characterHeight * 100)}%; width:${scale * 100}%; height:${scale * 100}%; transform:translate(-50%,-50%)`">
+                                                    <template x-for="handle in ['nw', 'ne', 'w', 'e', 'sw', 'se']">
+                                                        <button type="button" @pointerdown.stop.prevent="beginTransform($event, 'scale')" :class="{'-left-3.5 -top-3.5 cursor-nwse-resize': handle === 'nw', '-right-3.5 -top-3.5 cursor-nesw-resize': handle === 'ne', '-left-3.5 top-1/2 -translate-y-1/2 cursor-ew-resize': handle === 'w', '-right-3.5 top-1/2 -translate-y-1/2 cursor-ew-resize': handle === 'e', '-bottom-3.5 -left-3.5 cursor-nesw-resize': handle === 'sw', '-bottom-3.5 -right-3.5 cursor-nwse-resize': handle === 'se'}" class="pointer-events-auto absolute z-10 flex h-7 w-7 touch-none items-center justify-center rounded-lg border-2 border-white bg-coral text-sm font-black leading-none text-white shadow-lg ring-1 ring-ink/25" :aria-label="`Resize character from ${handle} handle`">
+                                                            <span aria-hidden="true" x-text="({nw: '↖', ne: '↗', w: '↔', e: '↔', sw: '↙', se: '↘'})[handle]"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </template>
-                            <div x-show="updatingName" class="absolute inset-0 flex items-center justify-center bg-white/65" aria-live="polite">
+
+                            <div x-show="updatingName" class="absolute inset-0 flex items-center justify-center rounded-[2.5rem] bg-white/65" aria-live="polite">
                                 <span class="rounded-full bg-ink px-4 py-2 text-sm font-bold text-white">Updating name…</span>
                             </div>
-                            <div x-show="changingColour" class="absolute inset-0 flex items-center justify-center bg-white/65" aria-live="polite">
+                            <div x-show="changingColour" class="absolute inset-0 flex items-center justify-center rounded-[2.5rem] bg-white/65" aria-live="polite">
                                 <span class="rounded-full bg-ink px-4 py-2 text-sm font-bold text-white">Updating colours…</span>
                             </div>
                             <div x-show="savingLayout" class="absolute inset-x-0 bottom-3 mx-auto w-max rounded-full bg-ink/80 px-3 py-1 text-xs text-white">Saving…</div>
@@ -178,10 +209,12 @@
                     @endif
 
                     @if($productExamples->isNotEmpty())
+                        {{-- Product tab: only static product photos/mockups — never the customer's
+                             artwork. The frame is represented in the Design tab instead. --}}
                         <div x-show="previewMode === 'product'" class="overflow-hidden rounded-[2.5rem] bg-white" style="aspect-ratio: {{ $designWidth }} / {{ $designHeight }}">
                             <img :src="exampleUrl" :alt="exampleAlt" class="h-full w-full object-contain">
                         </div>
-                        <div class="mt-3 grid min-h-24 grid-cols-4 content-start gap-3">
+                        <div class="relative z-20 mt-3 grid min-h-24 grid-cols-4 content-start gap-3">
                                 @foreach($productExamples as $image)
                                     <button type="button" x-show="!examplesFollowVariant || selectedVariantId === @js($image->product_variant_id)" @click="previewMode = 'product'; exampleUrl = @js($image->url()); exampleAlt = @js($image->alt_text)" class="aspect-square cursor-pointer overflow-hidden rounded-xl bg-sand ring-2 ring-transparent focus:ring-coral" :class="previewMode === 'product' && exampleUrl === @js($image->url()) ? 'ring-coral' : ''">
                                         <img src="{{ $image->url() }}" alt="{{ $image->alt_text }}" class="h-full w-full object-cover">
@@ -208,7 +241,7 @@
                             <legend class="font-display text-xl">{{ $session->product->preview_configuration['variant_label'] ?? 'Bottle colour' }}</legend>
                             <div class="bottle-colour-options mt-4 grid grid-cols-4 gap-2">
                                 @foreach($bottleVariants as $variant)
-                                    @php($colourLabel = strtolower($variant->options['colour'] ?? '') === 'grey' ? 'Gray' : str($variant->options['colour'] ?? '')->title())
+                                    @php($colourLabel = strtolower($variant->options['colour'] ?? '') === 'grey' ? 'Gray' : str($variant->options['colour'] ?? $variant->options['frame'] ?? $variant->name)->title())
                                     @php($variantAvailable = $variant->hasSingleActiveFulfilmentMapping())
                                     <label class="selection-card min-w-0 {{ $variantAvailable ? '' : 'cursor-not-allowed opacity-45' }}" :class="changingColour ? 'pointer-events-none opacity-60' : ''" @if(!$variantAvailable) title="This option is not currently available" @endif>
                                         <input class="sr-only" type="radio" name="preview_variant_id" value="{{ $variant->id }}" :checked="selectedVariantId === @js($variant->id)" @change="chooseVariant(@js($variant->id))" @disabled(!$variantAvailable) :disabled="changingColour">
@@ -217,6 +250,7 @@
                                 @endforeach
                             </div>
                         </fieldset>
+                        @if($session->product->personalisationFields->contains(fn ($field) => $field->key === 'name'))
                         <div class="mt-8">
                             <div class="flex items-center justify-between gap-3">
                                 <label for="artwork-name" class="form-label">Name</label>
@@ -227,6 +261,7 @@
                                 <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-ink px-3 py-1.5 text-xs font-bold text-white transition hover:bg-coral disabled:cursor-not-allowed disabled:opacity-35" @click="updateName()" :disabled="updatingName || savingLayout || changingColour || nameValue === savedNameValue" aria-label="Apply name">OK</button>
                             </div>
                         </div>
+                        @endif
                     @endif
 
                     <form method="POST" action="{{ route('artwork.cart', $session->public_id) }}" class="mt-9">
@@ -527,6 +562,9 @@ document.addEventListener('alpine:init', () => {
             this.renderFingerprint = null;
             this.selectedVariantId = variantId;
             this.surfaceColour = this.variantSurfaces[variantId] || '#f4efe7';
+            // Optimistically swap the frame overlay (wall prints) and surface the Design tab,
+            // where the frame is represented around the artwork.
+            this.frameOverlayUrl = (this.frameOverlays && this.frameOverlays[variantId]) || this.frameOverlayUrl;
             this.previewMode = 'design';
             this.changingColour = true;
             this.colourError = '';
@@ -554,6 +592,7 @@ document.addEventListener('alpine:init', () => {
                 this.editorBackgroundUrl = nextBackgroundUrl;
                 this.renderFingerprint = data.render_fingerprint;
                 this.applyDesignGeometry(data.design_geometry);
+                if (data.frame_overlay_url !== undefined) this.frameOverlayUrl = data.frame_overlay_url;
                 if (this.examplesFollowVariant) {
                     const firstExample = this.variantExamples[variantId]?.[0];
                     this.exampleUrl = firstExample?.url || null;

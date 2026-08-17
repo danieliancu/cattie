@@ -50,6 +50,13 @@ class RenderComposedDesign
                 'width' => max(1, (int) round($size['width'] * $scale)),
                 'height' => max(1, (int) round($size['height'] * $scale)),
             ];
+        } else {
+            // Large print areas (wall prints: A3 ≈ 17 MP, A2 ≈ 35 MP at 300 DPI) hold a
+            // full truecolor canvas plus its PNG encode buffer at once, which can exceed a
+            // default memory_limit. Raise it (never lower it) for the render rather than
+            // dropping the print DPI. For production robustness the full-resolution render
+            // should move to a queued job — see the plan's reported limitation.
+            $this->ensureMemoryForCanvas($size['width'], $size['height']);
         }
         $personalisation = collect($session->personalisation_snapshot)->keyBy('key');
         $sourceBytes = Storage::disk($asset->disk)->get($asset->storage_key);
@@ -57,6 +64,18 @@ class RenderComposedDesign
         unset($sourceBytes);
         if (! $source) {
             throw new RuntimeException('The generation asset is unreadable.');
+        }
+
+        // Wall-print composition draws a real raster background (the photo-derived or
+        // AI-linked context) beneath the character. It is a sibling asset on the same
+        // generation; a missing one degrades to the template's fallback colour rather
+        // than failing the render.
+        $background = null;
+        $backgroundAsset = $asset->generation?->assets()->where('kind', 'context_background')->first();
+        if ($backgroundAsset) {
+            $backgroundBytes = Storage::disk($backgroundAsset->disk)->get($backgroundAsset->storage_key);
+            $background = $backgroundBytes === null ? null : @imagecreatefromstring($backgroundBytes);
+            unset($backgroundBytes);
         }
 
         $canvas = imagecreatetruecolor($size['width'], $size['height']);
@@ -91,6 +110,7 @@ class RenderComposedDesign
                 }
                 match ($layer['type'] ?? null) {
                     'transparent' => [$this->renderTransparent($canvas), $this->renderTransparent($editorCanvas)],
+                    'context_background' => [$this->renderContextBackground($canvas, $background, $definition[$layer['config'] ?? ''] ?? []), $this->renderContextBackground($editorCanvas, $background, $definition[$layer['config'] ?? ''] ?? [])],
                     'personalisation_text_pattern' => [$this->renderTextPattern($canvas, $layer, $definition, $personalisation->all(), $template, $session->variant->options ?? []), $this->renderTextPattern($editorCanvas, $layer, $definition, $personalisation->all(), $template, $session->variant->options ?? [])],
                     'generation_asset' => $this->renderGenerationAsset($canvas, $source, $layer, $definition[$layer['config'] ?? ''] ?? [], $characterAdjustments, $definition['character_clip'] ?? ['mode' => 'canvas']),
                     default => throw new RuntimeException('The design template contains an unsupported layer.'),
@@ -118,6 +138,9 @@ class RenderComposedDesign
             imagedestroy($source);
             imagedestroy($canvas);
             imagedestroy($editorCanvas);
+            if ($background instanceof \GdImage) {
+                imagedestroy($background);
+            }
         }
 
         $directory = "artwork-sessions/{$session->public_id}/composed-designs";
@@ -230,6 +253,40 @@ class RenderComposedDesign
         imagefill($canvas, 0, 0, imagecolorallocatealpha($canvas, 0, 0, 0, 127));
         imagesavealpha($canvas, true);
         imagealphablending($canvas, true);
+    }
+
+    /**
+     * Generic raster background layer: draws a resolved `context_background` sibling asset
+     * full-bleed (cover fit) beneath other layers, filling the template fallback colour when
+     * none exists. Retained as a reusable layer type; the current wall-print templates
+     * instead bake the scene into a single cover-fitted generation_asset.
+     */
+    public function renderContextBackground(\GdImage $canvas, ?\GdImage $background, array $config): void
+    {
+        $canvasWidth = imagesx($canvas);
+        $canvasHeight = imagesy($canvas);
+
+        if (! $background instanceof \GdImage) {
+            imagealphablending($canvas, false);
+            imagefill($canvas, 0, 0, $this->colour($canvas, $config['fallback_colour'] ?? '#efe9e2'));
+            imagesavealpha($canvas, true);
+            imagealphablending($canvas, true);
+
+            return;
+        }
+
+        $sourceWidth = imagesx($background);
+        $sourceHeight = imagesy($background);
+        // Cover fit: the larger scale so the background fills the whole canvas, then
+        // centre-crop the overflow.
+        $scale = max($canvasWidth / $sourceWidth, $canvasHeight / $sourceHeight);
+        $drawWidth = max(1, (int) ceil($sourceWidth * $scale));
+        $drawHeight = max(1, (int) ceil($sourceHeight * $scale));
+        $destX = (int) round(($canvasWidth - $drawWidth) / 2);
+        $destY = (int) round(($canvasHeight - $drawHeight) / 2);
+
+        imagealphablending($canvas, true);
+        imagecopyresampled($canvas, $background, $destX, $destY, 0, 0, $drawWidth, $drawHeight, $sourceWidth, $sourceHeight);
     }
 
     public function renderTextPattern(\GdImage $canvas, array $layer, array $definition, array $personalisation, ProductDesignTemplate $template, array $variantOptions): void
@@ -391,15 +448,23 @@ class RenderComposedDesign
 
     public function renderGenerationAsset(\GdImage $canvas, \GdImage $source, array $layer, array $config, array $adjustments = [], array $clipPolicy = ['mode' => 'canvas']): void
     {
-        if (($layer['fit'] ?? null) !== 'contain') {
-            throw new RuntimeException('Generation artwork must use contain fitting.');
+        $fit = $layer['fit'] ?? null;
+        if (! in_array($fit, ['contain', 'cover'], true)) {
+            throw new RuntimeException('Generation artwork must use contain or cover fitting.');
         }
         $rect = $this->characterBox($config, imagesx($canvas), imagesy($canvas));
         $sourceRect = $this->opaqueBounds($source);
-        $contained = $this->containedSize($sourceRect['width'], $sourceRect['height'], $rect['width'], $rect['height']);
+        if ($fit === 'cover') {
+            // Fill the box (crop the overflow) — used by wall prints, where the artwork is a
+            // single character-plus-background image that should fill the print edge to edge.
+            $coverScale = max($rect['width'] / $sourceRect['width'], $rect['height'] / $sourceRect['height']);
+            $base = ['width' => max(1, (int) round($sourceRect['width'] * $coverScale)), 'height' => max(1, (int) round($sourceRect['height'] * $coverScale))];
+        } else {
+            $base = $this->containedSize($sourceRect['width'], $sourceRect['height'], $rect['width'], $rect['height']);
+        }
         $scale = max(.1, min(50, (float) ($adjustments['scale'] ?? 1)));
-        $width = max(1, (int) round($contained['width'] * $scale));
-        $height = max(1, (int) round($contained['height'] * $scale));
+        $width = max(1, (int) round($base['width'] * $scale));
+        $height = max(1, (int) round($base['height'] * $scale));
         $offsetX = max(-1000, min(1000, (float) ($adjustments['offset_x'] ?? 0))) * imagesx($canvas);
         $offsetY = max(-1000, min(1000, (float) ($adjustments['offset_y'] ?? 0))) * imagesy($canvas);
         $x = $rect['x'] + (int) round(($rect['width'] - $width) / 2 + $offsetX);
@@ -524,6 +589,39 @@ class RenderComposedDesign
         imagedestroy($preview);
 
         return $bytes;
+    }
+
+    private function ensureMemoryForCanvas(int $width, int $height): void
+    {
+        $megapixels = ($width * $height) / 1_000_000;
+        if ($megapixels <= 6) {
+            return;
+        }
+        $current = ini_get('memory_limit');
+        if ($current === false || trim((string) $current) === '-1') {
+            return; // already unlimited
+        }
+        // The full-resolution render holds several full-canvas buffers at once (the canvas,
+        // the loaded source, the PNG encode buffer, the editor canvas) plus the framework
+        // baseline. Even an A4 wall print (~9.6 MP) exceeds a default 128 MB web limit, so
+        // budget generously from the canvas size and only ever raise the limit, never lower
+        // it. (For production robustness this render should ideally move to a queued job.)
+        $budgetBytes = ((int) ceil($megapixels * 24) + 320) * 1_048_576;
+        if ($this->bytesFromShorthand((string) $current) < $budgetBytes) {
+            @ini_set('memory_limit', (int) ceil($budgetBytes / 1_048_576).'M');
+        }
+    }
+
+    private function bytesFromShorthand(string $value): int
+    {
+        $value = trim($value);
+        $number = (int) $value;
+        return match (strtolower(substr($value, -1))) {
+            'g' => $number * 1_073_741_824,
+            'm' => $number * 1_048_576,
+            'k' => $number * 1024,
+            default => $number,
+        };
     }
 
     private function colour(\GdImage $image, string $hex): int

@@ -26,7 +26,7 @@
     <p x-ref="copy" class="line-clamp-2 leading-7 text-muted sm:line-clamp-none sm:text-lg sm:leading-8" :class="expanded && '!line-clamp-none'">{{ $text }}</p>
 
     <button type="button" x-show="overflowing && ! expanded" x-cloak @click="expanded = true"
-            class="see-more-fade absolute bottom-0 right-0 pl-8 font-semibold text-ink sm:hidden">… See more</button>
+            class="see-more-fade absolute bottom-0 right-0 pl-8 font-semibold text-ink sm:hidden" style="top:28px;">… See more</button>
 
     <button type="button" x-show="expanded" x-cloak @click="expanded = false; $nextTick(() => measure())"
             class="mt-1 font-semibold text-ink sm:hidden">See less</button>

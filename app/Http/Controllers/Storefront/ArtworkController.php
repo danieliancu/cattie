@@ -257,6 +257,31 @@ class ArtworkController extends Controller
         $session->update(['product_variant_id' => $variant->id]);
 
         if ($request->expectsJson()) {
+            // When the template's composition does not depend on the variant (e.g. a wall
+            // print, where the frame colour is physical and never alters the printed
+            // artwork) we reuse the existing design instead of re-rendering it. This keeps
+            // ONE design across all frames — the frame change only swaps the Product-tab
+            // overlay client-side — so switching colour never regenerates AI artwork nor
+            // multiplies ComposedDesign rows.
+            $variantAffectsComposition = $currentDesign
+                ? (bool) ($currentDesign->resolved_manifest['configuration']['variant_affects_composition'] ?? true)
+                : (bool) ($session->product->designTemplate?->definition()['variant_affects_composition'] ?? true);
+
+            if ($currentDesign && ! $variantAffectsComposition) {
+                return response()->json([
+                    'variant_id' => $variant->id,
+                    'surface_colour' => $currentDesign->load('variant')->previewSurfaceColour(),
+                    'design_id' => $currentDesign->id,
+                    'asset_id' => $currentDesign->generation_asset_id,
+                    'preview_url' => route('artwork.designs', [$session->public_id, $currentDesign]),
+                    'layout_url' => route('artwork.design-layout', [$session->public_id, $currentDesign]),
+                    'background_url' => route('artwork.design-editor-background', [$session->public_id, $currentDesign]),
+                    'render_fingerprint' => $currentDesign->render_fingerprint,
+                    'design_geometry' => $this->designGeometry($currentDesign),
+                    'frame_overlay_url' => $this->frameOverlayUrl($session->product, $variant),
+                ]);
+            }
+
             try {
                 $design = $render->handlePreview($session->fresh(), $currentDesign->generationAsset, $currentDesign->character_adjustments ?? []);
             } catch (\Throwable $e) {
@@ -276,10 +301,27 @@ class ArtworkController extends Controller
                 'background_url' => route('artwork.design-editor-background', [$session->public_id, $design]),
                 'render_fingerprint' => $design->render_fingerprint,
                 'design_geometry' => $this->designGeometry($design),
+                'frame_overlay_url' => $this->frameOverlayUrl($session->product, $variant),
             ]);
         }
 
         return redirect()->route('products.show', $session->product->slug);
+    }
+
+    /**
+     * The framed-mockup overlay for a variant's frame colour, from
+     * preview_configuration.frame_overlays. Presentation only — the Product tab lays it
+     * over the composed design so the customer sees their artwork in the chosen frame.
+     */
+    private function frameOverlayUrl(Product $product, \App\Models\ProductVariant $variant): ?string
+    {
+        $overlays = $product->preview_configuration['frame_overlays'] ?? [];
+        $frame = strtolower((string) ($variant->options['frame'] ?? ''));
+        $asset = $overlays[$frame] ?? null;
+
+        return isset($asset['disk'], $asset['storage_key'])
+            ? Storage::disk($asset['disk'])->url($asset['storage_key'])
+            : null;
     }
 
     public function name(string $publicId, Request $request, RenderComposedDesign $render): JsonResponse

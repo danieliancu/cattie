@@ -16,7 +16,7 @@
 
         @auth
             @if ($orders && $orders->isEmpty())
-                <p class="rounded-2xl bg-sand p-5 text-sm text-muted">You don't have any orders yet, so there's nothing to report a problem with. If you think this is wrong, please get in touch another way.</p>
+                <p class="rounded-2xl bg-sand p-5 text-sm text-muted">You don't have any orders yet, so there's nothing to report a problem with. If you think this is wrong, please get in touch <a class="font-semibold text-ink underline underline-offset-2 hover:text-coral" href="mailto:support@kattie.uk">another way</a>.</p>
             @else
                 <div class="mb-6">
                     <label for="order_number" class="form-label">Order number</label>

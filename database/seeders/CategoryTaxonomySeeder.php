@@ -38,12 +38,37 @@ class CategoryTaxonomySeeder extends Seeder
         'childrens-storybook-wall-print' => ['personalised-wall-prints'],
         'best-friend-pet-portrait' => ['personalised-pet-portraits'],
         'our-family-art-print' => ['personalised-family-portraits'],
+        'custom-a4-wall-print' => ['personalised-wall-prints'],
+        'custom-a3-wall-print' => ['personalised-wall-prints'],
+        'custom-a2-wall-print' => ['personalised-wall-prints'],
+        'custom-landscape-a4-wall-print' => ['personalised-wall-prints'],
+        'custom-landscape-a3-wall-print' => ['personalised-wall-prints'],
+        'custom-landscape-a2-wall-print' => ['personalised-wall-prints'],
+    ];
+
+    /**
+     * Curated marketing photography for the four top-level categories, shown in
+     * the homepage circles. Unlike the abstract textures these are real scenes,
+     * so they are written to the category's image columns (card artwork's top
+     * priority) rather than served as a last-resort fallback — otherwise an
+     * arbitrary descendant product photo would win over them.
+     *
+     * Assets live in seeders/assets/categories/cards/{slug}.jpg.
+     *
+     * @var array<string, string> slug => alt text
+     */
+    public const CARD_IMAGES = [
+        'school-everyday' => 'Two children with personalised school backpacks and a water bottle featuring their own characters',
+        'memories-keepsakes' => 'A child beside a framed storybook portrait and a matching personalised keepsake box',
+        'pets-family' => 'A boy sitting beside his dog, holding a mug personalised with his pet',
+        'gifts-occasions' => 'A child opening personalised birthday gifts with balloons and a keepsake set',
     ];
 
     public function run(): void
     {
         $leaves = $this->seedTree();
         $this->publishCategoryTextures();
+        $this->assignCategoryCards();
         $this->assignProducts($leaves);
         $this->removeLegacyCategories();
     }
@@ -62,6 +87,41 @@ class CategoryTaxonomySeeder extends Seeder
     {
         foreach (glob(database_path('seeders/assets/categories/*.jpg')) as $asset) {
             Storage::disk('public')->put('categories/'.basename($asset), file_get_contents($asset));
+        }
+    }
+
+    /**
+     * Publishes the homepage card photography and points each top-level category
+     * at it — but only where an admin has not uploaded their own image. Re-seeding
+     * therefore keeps the shipped artwork current without ever clobbering a
+     * deliberate admin upload, exactly as the texture step leaves image columns
+     * untouched.
+     *
+     * @see ProductCategory::cardImage()
+     */
+    private function assignCategoryCards(): void
+    {
+        foreach (self::CARD_IMAGES as $slug => $alt) {
+            $asset = database_path('seeders/assets/categories/cards/'.$slug.'.jpg');
+
+            if (! is_file($asset)) {
+                continue;
+            }
+
+            $key = 'categories/cards/'.$slug.'.jpg';
+            Storage::disk('public')->put($key, file_get_contents($asset));
+
+            $category = ProductCategory::query()->topLevel()->where('slug', $slug)->first();
+
+            if ($category === null || filled($category->image_storage_key)) {
+                continue;
+            }
+
+            $category->update([
+                'image_disk' => 'public',
+                'image_storage_key' => $key,
+                'image_alt_text' => $alt,
+            ]);
         }
     }
 

@@ -7,6 +7,7 @@ return [
     'upload' => ['max_kb' => (int) env('ARTWORK_UPLOAD_MAX_KB', 10240), 'min_dimension' => 512, 'max_dimension' => 8000, 'normalised_max_dimension' => 2048],
     'openai' => ['api_key' => env('OPENAI_API_KEY'), 'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'), 'connect_timeout' => (int) env('AI_IMAGE_CONNECT_TIMEOUT', 10), 'timeout' => (int) env('AI_IMAGE_TIMEOUT', 180)],
     'background_removal' => ['python' => env('AI_BACKGROUND_REMOVAL_PYTHON', 'python'), 'model' => 'isnet-general-use', 'timeout' => 180],
+    'upscaler' => ['python' => env('AI_UPSCALER_PYTHON', 'python'), 'model' => env('AI_UPSCALER_MODEL', ''), 'timeout' => 240],
     'style_references' => [
         'storybook-cartoon-v3' => [
             'path' => base_path('resources/ai/style-references/storybook-cartoon-v3.png'),

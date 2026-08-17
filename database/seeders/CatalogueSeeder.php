@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Domain\Catalogue\Actions\SyncProductMarketingAssets;
+use App\Enums\ProductStatus;
 use App\Models\ArtworkStyle;
 use App\Models\Product;
 use App\Models\ProductDesignTemplate;
@@ -53,6 +54,7 @@ class CatalogueSeeder extends Seeder
         $this->seedTreatPodWaterBottle();
         $this->seedSmallPlasticLunchbox();
         $this->seedStationeryPencilTin();
+        $this->seedCustomWallPrints();
         // Runs last: the taxonomy assigns the products seeded above.
         $this->call(CategoryTaxonomySeeder::class);
     }
@@ -432,5 +434,288 @@ class CatalogueSeeder extends Seeder
                 ['product_variant_id' => $variant->id, 'disk' => $asset['public']['disk'], 'alt_text' => $asset['alt_text'], 'sort_order' => $asset['sort_order']],
             );
         }
+    }
+
+    /**
+     * The Custom Wall Print range: six public products (three sizes × two
+     * orientations), each offering the same three frame colours as variants.
+     *
+     * The structure is deliberate — size and orientation each define a separate
+     * product, frame colour is the only varying dimension per product, so the
+     * existing single-dimension variant picker renders it cleanly with a "Frame"
+     * legend. Nothing here needs a migration: sizing/orientation/frame all live
+     * in the variant `options` JSON, and the £-per-size price sits on each variant.
+     */
+    private function seedCustomWallPrints(): void
+    {
+        $styleIds = ArtworkStyle::query()->whereIn('slug', ['storybook-cartoon', 'hand-drawn'])->pluck('id');
+        $recommendedStyleId = ArtworkStyle::query()->where('slug', 'storybook-cartoon')->value('id');
+
+        // Wall Prints render through the same ProductDesignTemplate → ComposedDesign →
+        // RenderComposedDesign pipeline as the other products, via the character_over_context
+        // templates. One template per orientation (size is carried by the variant print area).
+        $portraitTemplate = ProductDesignTemplate::query()->updateOrCreate(
+            ['key' => 'wall-print-v1-portrait'],
+            ['version' => 1, 'definition_path' => 'wall-print-v1-portrait/template.json', 'name' => 'Wall Print (Portrait)'],
+        );
+        $landscapeTemplate = ProductDesignTemplate::query()->updateOrCreate(
+            ['key' => 'wall-print-v1-landscape'],
+            ['version' => 1, 'definition_path' => 'wall-print-v1-landscape/template.json', 'name' => 'Wall Print (Landscape)'],
+        );
+
+        // Publish the frame-mockup overlays (transparent-window frames) the Product tab lays
+        // over the composed design. Placeholders — admin can replace them per variant later.
+        foreach (glob(database_path('seeders/assets/wall-print-frames/*.svg')) as $asset) {
+            Storage::disk('public')->put('wall-print-frames/'.basename($asset), file_get_contents($asset));
+        }
+
+        // Selling price = TreatPod framed price + £10, identical across frames and
+        // across portrait/landscape. Keyed by size.
+        $priceBySize = ['A4' => 2250, 'A3' => 2695, 'A2' => 2995];
+
+        // Real TreatPod supplier SKUs, keyed "{orientation}-{size}-{frame}". The
+        // internal Cattie SKU (WP-…) is a different thing and is never surfaced in
+        // the storefront; this only feeds the fulfilment mapping. Verified from the
+        // individual TreatPod product pages — not derived.
+        $supplierSkus = [
+            'portrait-A4-black' => 'PORT-PRINT-WOOD-BLK-A4-WPR749',
+            'portrait-A4-natural' => 'PORT-PRINT-WOOD-NAT-A4-WPR750',
+            'portrait-A4-white' => 'PORT-PRINT-WOOD-WHT-A4-WPR751',
+            'portrait-A3-black' => 'PORT-PRINT-WOOD-BLK-A3-WPR756',
+            'portrait-A3-natural' => 'PORT-PRINT-WOOD-NAT-A3-WPR757',
+            'portrait-A3-white' => 'PORT-PRINT-WOOD-WHT-A3-WPR758',
+            'portrait-A2-black' => 'PORT-PRINT-WOOD-BLK-A2-WPR763',
+            'portrait-A2-natural' => 'PORT-PRINT-WOOD-NAT-A2-WPR764',
+            'portrait-A2-white' => 'PORT-PRINT-WOOD-WHT-A2-WPR765',
+            'landscape-A4-black' => 'LS-PRINT-WOOD-BLK-A4-WPR563',
+            'landscape-A4-natural' => 'LS-PRINT-WOOD-NAT-A4-WPR564',
+            'landscape-A4-white' => 'LS-PRINT-WOOD-WHT-A4-WPR565',
+            'landscape-A3-black' => 'LS-PRINT-WOOD-BLK-A3-WPR567',
+            'landscape-A3-natural' => 'LS-PRINT-WOOD-NAT-A3-WPR568',
+            'landscape-A3-white' => 'LS-PRINT-WOOD-WHT-A3-WPR569',
+            'landscape-A2-black' => 'LS-PRINT-WOOD-BLK-A2-WPR571',
+            'landscape-A2-natural' => 'LS-PRINT-WOOD-NAT-A2-WPR572',
+            'landscape-A2-white' => 'LS-PRINT-WOOD-WHT-A2-WPR573',
+        ];
+
+        // [frame key, variant name (also the picker label), internal SKU token]
+        $frames = [
+            ['black', 'Black Frame', 'BLACK'],
+            ['natural', 'Natural Frame', 'NATURAL'],
+            ['white', 'White Frame', 'WHITE'],
+        ];
+
+        $products = [
+            [
+                'name' => 'Custom A4 Wall Print', 'slug' => 'custom-a4-wall-print', 'size' => 'A4', 'orientation' => 'portrait',
+                'short' => 'Turn a favourite little face, family moment or beloved pet into a beautifully framed A4 wall print — just the right size to treasure on a shelf, desk or gallery wall.',
+                'description' => "Your favourite photograph, made into personalised wall art you'll want to keep forever. Printed on premium 230gsm matte photo paper and finished in a choice of solid black, natural or white frame, our A4 wall print is wonderfully versatile — perfect for a bedside shelf, a hallway gallery or a heartfelt gift. Each one is made to order here in the UK and arrives ready to hang or stand, so a moment you love is on display in minutes.",
+                'meta_title' => 'Custom A4 Wall Print | Personalised Framed Wall Art | Kattie.uk',
+                'meta_description' => 'Turn a favourite photo into a personalised A4 wall print, framed in black, natural or white. Premium matte print, made to order in the UK.',
+            ],
+            [
+                'name' => 'Custom A3 Wall Print', 'slug' => 'custom-a3-wall-print', 'size' => 'A3', 'orientation' => 'portrait',
+                'short' => 'A bigger, bolder personalised print. Turn a treasured photo into striking A3 framed wall art with real presence on the wall.',
+                'description' => "When a photograph deserves to be seen, our A3 wall print gives it room to shine. A generous step up from A4, it makes a confident statement above a bed, along a hallway or as the centrepiece of a family gallery. Printed on premium 230gsm matte photo paper and framed in solid black, natural or white, each one is made to order in the UK and arrives ready to hang — turning a favourite face, family moment or pet into art you'll be proud to display.",
+                'meta_title' => 'Custom A3 Wall Print | Personalised Framed Wall Art | Kattie.uk',
+                'meta_description' => 'Create a personalised A3 wall print from a favourite photo — a bigger framed statement in black, natural or white. Premium matte, made in the UK.',
+            ],
+            [
+                'name' => 'Custom A2 Wall Print', 'slug' => 'custom-a2-wall-print', 'size' => 'A2', 'orientation' => 'portrait',
+                'short' => 'Our largest portrait print. Turn an unforgettable photo into a show-stopping A2 framed piece that anchors the whole room.',
+                'description' => "For the photographs that mean the most, nothing beats the impact of A2. Our largest portrait wall print becomes a true focal point — above a sofa, in a hallway, or anywhere you want a moment you love to take centre stage. Printed on premium 230gsm matte photo paper and framed in solid black, natural or white, each A2 print is made to order in the UK and arrives ready to hang, transforming a favourite face, family or pet into a striking centrepiece.",
+                'meta_title' => 'Custom A2 Wall Print | Large Personalised Framed Art | Kattie.uk',
+                'meta_description' => 'Turn a favourite photo into a large personalised A2 wall print, framed in black, natural or white. Premium matte statement piece, made in the UK.',
+            ],
+            [
+                'name' => 'Custom Landscape A4 Wall Print', 'slug' => 'custom-landscape-a4-wall-print', 'size' => 'A4', 'orientation' => 'landscape',
+                'short' => 'A wide, horizontal take on personalised wall art — perfect for family groups, side-by-side pets and wider moments, framed beautifully in A4 landscape.',
+                'description' => "Some moments are simply wider than they are tall — a whole family together, two pets side by side, a sweeping afternoon by the sea. Our A4 landscape wall print is made for exactly those. Printed on premium 230gsm matte photo paper and finished in a choice of solid black, natural or white frame, it's a versatile size for a shelf, desk or gallery wall. Made to order in the UK and ready to hang or stand, it turns a favourite horizontal photo into art you'll treasure.",
+                'meta_title' => 'Custom Landscape A4 Wall Print | Personalised Wall Art | Kattie.uk',
+                'meta_description' => 'Personalised A4 landscape wall print from your favourite wide photo, framed in black, natural or white. Premium matte, made to order in the UK.',
+            ],
+            [
+                'name' => 'Custom Landscape A3 Wall Print', 'slug' => 'custom-landscape-a3-wall-print', 'size' => 'A3', 'orientation' => 'landscape',
+                'short' => 'A bigger horizontal statement. Give family groups, pets and wide moments room to breathe in a striking A3 landscape frame.',
+                'description' => "Wide moments deserve a wider canvas. Our A3 landscape wall print gives family line-ups, side-by-side pets and panoramic memories real presence on the wall — a bold step up from A4. Printed on premium 230gsm matte photo paper and framed in solid black, natural or white, each is made to order in the UK and arrives ready to hang. It's the perfect way to turn a favourite horizontal photograph into a confident centrepiece.",
+                'meta_title' => 'Custom Landscape A3 Wall Print | Personalised Wall Art | Kattie.uk',
+                'meta_description' => 'Create a personalised A3 landscape wall print from a favourite wide photo — framed in black, natural or white. Premium matte, made in the UK.',
+            ],
+            [
+                'name' => 'Custom Landscape A2 Wall Print', 'slug' => 'custom-landscape-a2-wall-print', 'size' => 'A2', 'orientation' => 'landscape',
+                'short' => 'Our largest landscape print. Turn a sweeping family photo or panoramic moment into a show-stopping A2 framed centrepiece.',
+                'description' => "For wide moments that deserve to be seen from across the room, our A2 landscape wall print delivers real impact. It's our largest horizontal size — ideal above a sofa or sideboard, where a family gathering, a pair of beloved pets or a favourite landscape can take centre stage. Printed on premium 230gsm matte photo paper and framed in solid black, natural or white, each A2 print is made to order in the UK and arrives ready to hang, turning a treasured photograph into a striking centrepiece.",
+                'meta_title' => 'Custom Landscape A2 Wall Print | Large Personalised Art | Kattie.uk',
+                'meta_description' => 'Turn a favourite wide photo into a large personalised A2 landscape wall print, framed in black, natural or white. Premium matte, made in the UK.',
+            ],
+        ];
+
+        foreach ($products as $position => $data) {
+            $isPortrait = $data['orientation'] === 'portrait';
+            $template = $isPortrait ? $portraitTemplate : $landscapeTemplate;
+
+            $product = Product::query()->updateOrCreate(
+                ['slug' => $data['slug']],
+                [
+                    'name' => $data['name'],
+                    'short_description' => $data['short'],
+                    'description' => $data['description'],
+                    'meta_title' => $data['meta_title'],
+                    'meta_description' => $data['meta_description'],
+                    'status' => ProductStatus::Published,
+                    'is_active' => true,
+                    'sort_order' => 10 + $position,
+                    'base_price_minor' => $priceBySize[$data['size']],
+                    'currency' => 'GBP',
+                    'product_design_template_id' => $template->id,
+                    // One cohesive illustration: the subject stays together with its background
+                    // (the whole photo is stylised), never cut out — so it never looks torn.
+                    'artwork_requirements' => [
+                        'source_photo' => 'required',
+                        'orientation' => $data['orientation'],
+                        'framing' => 'full_body',
+                        'isolated_subject' => false,
+                        'transparent_background' => false,
+                        'composition_target' => 'wall_print',
+                    ],
+                    'preview_configuration' => [
+                        'variant_label' => 'Frame',
+                        'default_variant_options' => ['frame' => 'black'],
+                        'specifications' => $this->wallPrintSpecifications($data['size'], $data['orientation']),
+                        // Product-tab frame mockups per frame colour (presentation only).
+                        'frame_overlays' => [
+                            'black' => ['disk' => 'public', 'storage_key' => 'wall-print-frames/wall-print-frame-'.$data['orientation'].'-black.svg'],
+                            'natural' => ['disk' => 'public', 'storage_key' => 'wall-print-frames/wall-print-frame-'.$data['orientation'].'-natural.svg'],
+                            'white' => ['disk' => 'public', 'storage_key' => 'wall-print-frames/wall-print-frame-'.$data['orientation'].'-white.svg'],
+                        ],
+                    ],
+                ],
+            );
+
+            $product->artworkStyles()->sync($styleIds);
+            $product->update(['recommended_artwork_style_id' => $recommendedStyleId]);
+
+            $orientationToken = $data['orientation'] === 'portrait' ? 'P' : 'L';
+            $skus = [];
+            foreach ($frames as $index => [$frame, $frameName, $frameToken]) {
+                $sku = 'WP-'.$data['size'].'-'.$orientationToken.'-'.$frameToken;
+                $skus[] = $sku;
+                $variant = $product->variants()->withTrashed()->updateOrCreate(
+                    ['sku' => $sku],
+                    [
+                        'name' => $frameName,
+                        'options' => ['size' => $data['size'], 'orientation' => $data['orientation'], 'frame' => $frame],
+                        'price_minor' => $priceBySize[$data['size']],
+                        'currency' => 'GBP',
+                        'is_active' => true,
+                        'sort_order' => $index,
+                    ],
+                );
+                if ($variant->trashed()) {
+                    $variant->restore();
+                }
+
+                $supplierSku = $supplierSkus[$data['orientation'].'-'.$data['size'].'-'.$frame] ?? null;
+                if ($supplierSku !== null) {
+                    // print_areas drives the print-ready canvas (real TreatPod physical size
+                    // × 300 DPI) via requiredPrintResolution(); the preview is downscaled
+                    // separately. Frame colour never changes the print geometry.
+                    $variant->fulfilmentMappings()->updateOrCreate(
+                        ['provider' => 'treatpod'],
+                        [
+                            'provider_sku' => $supplierSku,
+                            'configuration' => [
+                                'attributes' => [
+                                    'orientation' => $data['orientation'],
+                                    'size' => $data['size'],
+                                    'frame_colour' => $frame,
+                                    'frame_material' => '2.5mm MDF',
+                                    'paper' => '230gsm matte photo paper',
+                                    'glazing' => '2mm float glass or 1.2mm styrene',
+                                    'made_in' => 'United Kingdom',
+                                ],
+                                ...$this->wallPrintPrintGeometry($data['size'], $isPortrait),
+                            ],
+                            'is_active' => true,
+                        ],
+                    );
+                }
+            }
+            // Retire any stray variant no longer in the matrix (idempotent cleanup).
+            $product->variants()->whereNotIn('sku', $skus)->update(['is_active' => false]);
+
+            // Placeholder marketing image — added only when the product has none, so
+            // a later admin upload is never overwritten on re-seed. The SVG is
+            // published to demo/catalogue by the run() asset loop.
+            if ($product->images()->count() === 0) {
+                $product->images()->create([
+                    'disk' => 'public',
+                    'storage_key' => 'demo/catalogue/wall-print-placeholder.svg',
+                    'alt_text' => $data['name'].' — personalised framed wall art',
+                    'sort_order' => 0,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Real, TreatPod-sourced technical specs for a wall print, shaped for
+     * preview_configuration.specifications. Size drives the print dimensions and
+     * the hanging hardware; everything else is common to the range.
+     *
+     * @return array<int, array{label: string, value: string}>
+     */
+    private function wallPrintSpecifications(string $size, string $orientation): array
+    {
+        $printSize = ['A4' => 'A4 · 29.7 × 21 cm', 'A3' => 'A3 · 42 × 29.7 cm', 'A2' => 'A2 · 59.4 × 42 cm'][$size];
+        $hanging = $size === 'A4'
+            ? 'Strut back — hang or stand, both ways'
+            : 'Hinged cobra hangers — hang both ways';
+
+        return [
+            ['label' => 'Orientation', 'value' => $orientation === 'portrait' ? 'Portrait' : 'Landscape'],
+            ['label' => 'Print size', 'value' => $printSize],
+            ['label' => 'Paper', 'value' => '230gsm matte photo paper'],
+            ['label' => 'Frame', 'value' => '2.5mm MDF — choose black, natural or white'],
+            ['label' => 'Glazing', 'value' => '2mm float glass or 1.2mm styrene'],
+            ['label' => 'Hanging', 'value' => $hanging],
+            ['label' => 'Made in', 'value' => 'United Kingdom'],
+        ];
+    }
+
+    /**
+     * Print-ready canvas geometry with bleed. The renderer sizes the canvas from the
+     * WITH-BLEED dimensions (trim + 6.5 mm on each of the four sides = +13 mm per axis)
+     * at 300 DPI, so the background is composed edge-to-edge including the bleed; the
+     * character stays inside the trim/safe area via the template's safe zones.
+     *
+     * @return array{physical_print_area: array<string, mixed>, print_areas: array<string, mixed>}
+     */
+    private function wallPrintPrintGeometry(string $size, bool $isPortrait): array
+    {
+        // ISO trim size as [short_mm, long_mm].
+        [$trimShort, $trimLong] = ['A4' => [210, 297], 'A3' => [297, 420], 'A2' => [420, 594]][$size];
+        $bleedMm = 6.5;
+        $bleedShort = $trimShort + 2 * $bleedMm;
+        $bleedLong = $trimLong + 2 * $bleedMm;
+        $px = fn (float $mm): int => (int) round($mm * 300 / 25.4);
+
+        $widthMm = $isPortrait ? $bleedShort : $bleedLong;
+        $heightMm = $isPortrait ? $bleedLong : $bleedShort;
+
+        return [
+            'physical_print_area' => [
+                'trim_width_mm' => $isPortrait ? $trimShort : $trimLong,
+                'trim_height_mm' => $isPortrait ? $trimLong : $trimShort,
+                'bleed_mm' => $bleedMm,
+                'width_mm' => $widthMm,   // trim + bleed on both sides
+                'height_mm' => $heightMm,
+                'dpi' => 300,
+                'source' => 'treatpod',
+            ],
+            'print_areas' => [
+                'default' => ['width' => $px($widthMm), 'height' => $px($heightMm), 'dpi' => 300],
+            ],
+        ];
     }
 }

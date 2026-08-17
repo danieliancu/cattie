@@ -66,7 +66,7 @@
             </div>
             <a class="nav-link" href="{{ route('home') }}#how-it-works">How it works</a>
             <div class="relative" @click.outside="desktopOpenMenu=null">
-                <a class="inline-flex cursor-pointer items-center gap-1 font-bold text-coral underline underline-offset-4 hover:text-ink" href="{{ route('order-support.create') }}" @mouseenter="desktopOpenMenu='order-support'"><span>Order Support</span><i data-lucide="chevron-down" class="h-3.5 w-3.5 cursor-pointer" aria-hidden="true" @click.prevent="desktopOpenMenu = desktopOpenMenu==='order-support' ? null : 'order-support'"></i></a>
+                <a class="nav-link inline-flex cursor-pointer items-center gap-1" href="{{ route('order-support.create') }}" @mouseenter="desktopOpenMenu='order-support'"><span>Order Support</span><i data-lucide="chevron-down" class="h-3.5 w-3.5 cursor-pointer" aria-hidden="true" @click.prevent="desktopOpenMenu = desktopOpenMenu==='order-support' ? null : 'order-support'"></i></a>
                 <div x-show="desktopOpenMenu==='order-support'" x-cloak @mouseleave="desktopOpenMenu=null" class="absolute left-0 top-full z-50 mt-3 w-48 rounded-2xl border border-rose/25 bg-white p-2 shadow-2xl">
                     <a href="#" class="block rounded-xl px-4 py-3 text-ink hover:bg-blush/40 hover:text-coral">Track Order</a><a href="{{ route('order-support.create') }}" class="block rounded-xl px-4 py-3 text-ink hover:bg-blush/40 hover:text-coral">Something wrong?</a>
                 </div>
@@ -104,8 +104,8 @@
             </div>
             <a class="nav-link block" href="{{ route('home') }}#how-it-works">How it works</a>
             <div class="flex items-center justify-between">
-                <a class="block flex-1 py-2 font-bold text-coral underline underline-offset-4" href="{{ route('order-support.create') }}">Order Support</a>
-                <button type="button" class="p-2 text-coral" @click="mobileOpenMenu = mobileOpenMenu==='order-support' ? null : 'order-support'" :aria-expanded="mobileOpenMenu==='order-support'" aria-controls="mobile-order-support-links" aria-label="Toggle order support links"><i data-lucide="chevron-down" class="h-4 w-4 transition" :class="mobileOpenMenu==='order-support' ? 'rotate-180' : ''" aria-hidden="true"></i></button>
+                <a class="nav-link block flex-1 py-2" href="{{ route('order-support.create') }}">Order Support</a>
+                <button type="button" class="p-2" @click="mobileOpenMenu = mobileOpenMenu==='order-support' ? null : 'order-support'" :aria-expanded="mobileOpenMenu==='order-support'" aria-controls="mobile-order-support-links" aria-label="Toggle order support links"><i data-lucide="chevron-down" class="h-4 w-4 transition" :class="mobileOpenMenu==='order-support' ? 'rotate-180' : ''" aria-hidden="true"></i></button>
             </div>
             <div id="mobile-order-support-links" x-show="mobileOpenMenu==='order-support'" x-cloak class="ml-3 border-l border-rose/20 pl-3">
                 <a class="nav-link block text-sm font-normal" href="#">Track Order</a>

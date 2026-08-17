@@ -101,6 +101,27 @@ class GenerationPromptBuilderTest extends TestCase
         Queue::assertPushed(\App\Jobs\GenerateArtwork::class, 1);
     }
 
+    public function test_wall_print_prompt_keeps_subject_and_background_together_as_one_scene(): void
+    {
+        [$session] = $this->createArtworkSession('storybook-cartoon', [
+            'framing' => 'full_body',
+            'isolated_subject' => false,
+            'transparent_background' => false,
+            'composition_target' => 'wall_print',
+        ]);
+
+        $resolved = app(GenerationPromptBuilder::class)->build($session);
+
+        $this->assertSame('wall-print-scene-storybook-v1', $resolved['key']);
+        $this->assertSame(1, $resolved['version']);
+        $this->assertStringContainsString('keep the main subject TOGETHER with a soft, complementary background', $resolved['prompt']);
+        $this->assertStringContainsString('Do NOT isolate or cut out the subject', $resolved['prompt']);
+        $this->assertStringContainsString('IMAGE 2 is a STYLE REFERENCE ONLY', $resolved['prompt']);
+        $this->assertFalse($resolved['output_requirements']['transparent_background']);
+        $this->assertFalse($resolved['output_requirements']['isolated_subject']);
+        $this->assertSame('storybook-cartoon-v4', $resolved['input_references'][0]['key']);
+    }
+
     private function createArtworkSession(string $styleSlug, array $requirements): array
     {
         $product = Product::factory()->create(['artwork_requirements' => $requirements]);

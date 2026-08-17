@@ -33,7 +33,7 @@ class ValidateDesignTemplateConfiguration
         });
         $validator->validate();
         foreach ($config['layers'] as $layer) {
-            if (! in_array($layer['type'] ?? null, ['transparent', 'personalisation_text_pattern', 'generation_asset'], true)) {
+            if (! in_array($layer['type'] ?? null, ['transparent', 'context_background', 'personalisation_text_pattern', 'generation_asset'], true)) {
                 throw ValidationException::withMessages(['layers' => 'Unsupported design layer type.']);
             }
             foreach (($layer['styles'] ?? []) as $style) {
