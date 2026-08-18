@@ -41,13 +41,33 @@ PRODUCTION HARDENING             █████░░░░░  parțial
 
 
 
+TO DO DISEARA!
 
-Mută randarea print-ready (full-res) din add-to-basket într-un job de queue
-Move full-resolution ComposedDesign render off the web request into a queued job
 
-Scop:
-- la add-to-basket se face doar verificarea fingerprint + adăugarea în coș;
-- randarea PNG-ului de print (300 DPI) se face într-un job de queue, cu garanția că fișierul de print există înainte de fulfilment + teste actualizate.
+
+
+
+- De verificat de ce a ramas
+We’re confirming your payment
+
+Please keep this page open. This usually takes only a few seconds.
+
+desi in Stripe s-a dus plata
+
+
+
+
+- De adaugat in admin sectiune de Orders
+
+
+
+
+
+
+
+
+
+
 
 
 

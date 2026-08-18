@@ -213,9 +213,28 @@ class ProductArtworkWorkspaceTest extends TestCase
         }
     }
 
+    public function test_products_that_keep_their_background_do_not_claim_background_removal(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        $product = Product::factory()->create(['slug' => 'cattie-scene-print', 'artwork_requirements' => ['transparent_background' => false, 'composition_target' => 'wall_print']]);
+        $variant = ProductVariant::factory()->for($product)->create();
+        $style = ArtworkStyle::query()->create(['name' => 'Storybook', 'slug' => 'storybook-'.uniqid(), 'prompt_key' => 'storybook', 'is_active' => true]);
+        $product->artworkStyles()->attach($style);
+
+        $this->withCookie('cattie_guest_token', 'scene-owner')->post(route('artwork.start', $product->slug), [
+            'variant_id' => $variant->id,
+            'artwork_style_id' => $style->id,
+            'photo' => UploadedFile::fake()->image('portrait.jpg', 800, 900),
+        ])->assertRedirect(route('products.show', $product->slug));
+
+        $page = $this->withCookie('cattie_guest_token', 'scene-owner')->get(route('products.show', $product->slug));
+        $page->assertOk()->assertSee('Composing your scene')->assertDontSee('Removing the background');
+    }
+
     private function catalogue(): array
     {
-        $product = Product::factory()->create(['slug' => 'cattie-water-bottle']);
+        $product = Product::factory()->create(['slug' => 'cattie-water-bottle', 'artwork_requirements' => ['aspect_ratio' => '4:5', 'transparent_background' => true]]);
         $variant = ProductVariant::factory()->for($product)->create();
         $style = ArtworkStyle::query()->create(['name' => 'Storybook', 'slug' => 'storybook-'.uniqid(), 'prompt_key' => 'storybook', 'is_active' => true]);
         $product->artworkStyles()->attach($style);

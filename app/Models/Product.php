@@ -108,6 +108,16 @@ class Product extends Model
         return ($this->preview_configuration['mockup_mode'] ?? null) === 'static_boundary';
     }
 
+    /**
+     * Whether the generated illustration keeps its own background (e.g. wall prints), rather
+     * than having it cut away. Mirrors the background-removal gate in BackgroundRemovalProcessor,
+     * which only strips the background when `transparent_background` is requested.
+     */
+    public function keepsPhotoBackground(): bool
+    {
+        return ! (bool) ($this->artwork_requirements['transparent_background'] ?? false);
+    }
+
     public function previewMockupUrl(): ?string
     {
         $asset = $this->preview_configuration['mockup_asset'] ?? null;

@@ -11,6 +11,7 @@ use App\Enums\ArtworkSessionStatus;
 use App\Enums\ArtworkProcessingStage;
 use App\Enums\GenerationStatus;
 use App\Http\Controllers\Controller;
+use App\Jobs\RenderComposedDesignPrint;
 use App\Models\ArtworkSession;
 use App\Models\ComposedDesign;
 use App\Models\GenerationAsset;
@@ -122,7 +123,7 @@ class ArtworkController extends Controller
         return response()->json([
             'status' => $session->status->value,
             'stage' => $stage?->value,
-            'message' => $session->status === ArtworkSessionStatus::Failed ? 'We couldn’t create your artwork this time.' : ($stage?->label() ?? 'Upload your photo'),
+            'message' => $session->status === ArtworkSessionStatus::Failed ? 'We couldn’t create your artwork this time.' : ($stage?->label($session->product->keepsPhotoBackground()) ?? 'Upload your photo'),
             'progress' => $stage?->progress() ?? 0,
             'preview_url' => $preview ? route('artwork.assets', [$session->public_id, $preview->id]) : null,
             'view_url' => $stage === ArtworkProcessingStage::Ready ? route('products.show', $session->product->slug) : null,
@@ -223,7 +224,7 @@ class ArtworkController extends Controller
         return redirect()->route('products.show', $session->product->slug);
     }
 
-    public function approve(string $publicId, Request $request, ApproveArtwork $action, RenderComposedDesign $render): RedirectResponse
+    public function approve(string $publicId, Request $request, ApproveArtwork $action): RedirectResponse
     {
         $session = $this->owned($publicId, $request);
         $validated = $request->validate(['asset_id' => 'required|string', 'design_id' => 'nullable|string', 'render_fingerprint' => 'nullable|string|size:64']);
@@ -231,10 +232,14 @@ class ArtworkController extends Controller
         $design = isset($validated['design_id']) ? ComposedDesign::query()->findOrFail($validated['design_id']) : null;
         if ($design && $session->product->designTemplate) {
             abort_unless(isset($validated['render_fingerprint']) && hash_equals((string) $design->render_fingerprint, $validated['render_fingerprint']), 409, 'The approved preview is out of date.');
-            $design = $render->handle($session, $asset, $design->character_adjustments ?? []);
-            abort_unless(hash_equals($validated['render_fingerprint'], (string) $design->render_fingerprint), 409, 'The production render does not match the approved preview.');
         }
+        // Approve the previewed design as-is; the heavy full-resolution print PNG is rendered
+        // off the request by RenderComposedDesignPrint. The fingerprint is manifest-derived,
+        // so the deferred print matches the approved preview without a synchronous re-render.
         $action->handle($session, $asset, $design);
+        if ($design && $session->product->designTemplate) {
+            RenderComposedDesignPrint::dispatch($design)->afterCommit();
+        }
 
         return redirect()->route('products.show', $session->product->slug);
     }

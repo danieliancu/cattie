@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Domain\Artwork\Actions\ApproveArtwork;
-use App\Domain\Artwork\Actions\RenderComposedDesign;
 use App\Domain\Cart\Actions\AddApprovedArtworkToCart;
 use App\Domain\Cart\Actions\AbandonCartCheckout;
 use App\Domain\Cart\Actions\RefreshCartPrices;
@@ -14,6 +13,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ArtworkSession;
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Jobs\RenderComposedDesignPrint;
 use App\Models\ComposedDesign;
 use App\Models\GenerationAsset;
 use App\Support\GuestContext;
@@ -23,7 +23,7 @@ use Illuminate\View\View;
 
 class CartController extends Controller
 {
-    public function add(string $publicId, Request $request, ResolveGuestCart $resolve, AddApprovedArtworkToCart $add, ApproveArtwork $approve, RenderComposedDesign $render, GuestContext $guest): RedirectResponse
+    public function add(string $publicId, Request $request, ResolveGuestCart $resolve, AddApprovedArtworkToCart $add, ApproveArtwork $approve, GuestContext $guest): RedirectResponse
     {
         $session = ArtworkSession::query()->where('public_id', $publicId)->firstOrFail();
         abort_unless($guest->owns($session->access_token_hash, $request), 404);
@@ -43,14 +43,16 @@ class CartController extends Controller
             abort_unless($asset, 422);
             if ($session->product->designTemplate) {
                 abort_unless($design && isset($selection['render_fingerprint']) && hash_equals((string) $design->render_fingerprint, $selection['render_fingerprint']), 409, 'The approved preview is out of date.');
-                $asset = $session->currentGeneration?->assets->firstWhere('kind', 'composition_source')
-                    ?? $session->currentGeneration?->assets->firstWhere('kind', 'provider_original');
-                abort_unless($asset, 422);
-                $design = $render->handle($session->fresh(), $asset, $design?->character_adjustments ?? []);
-                abort_unless(hash_equals($selection['render_fingerprint'], (string) $design->render_fingerprint), 409, 'The production render does not match the approved preview.');
+                // Approve the previewed design row itself and defer its full-resolution print
+                // PNG to RenderComposedDesignPrint. The asset must be the one the design was
+                // composed from so ApproveArtwork's design/asset consistency check holds.
+                $asset = GenerationAsset::query()->whereKey($design->generation_asset_id)->firstOrFail();
             }
             $approve->handle($session, $asset, $design);
             $session->refresh();
+            if ($session->product->designTemplate && $design) {
+                RenderComposedDesignPrint::dispatch($design)->afterCommit();
+            }
         }
         [$cart, $token] = $resolve->handle($request);
         $add->handle($cart, $session);

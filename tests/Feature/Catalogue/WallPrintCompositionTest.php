@@ -148,6 +148,26 @@ class WallPrintCompositionTest extends TestCase
         $this->assertSame($upscaled, $processor->process($upscaled, 1600));
     }
 
+    /** The editor character overlay (artwork.assets?trim=1) must render, not 500 on a big opaque scene. */
+    public function test_editor_character_overlay_is_served_downscaled_without_exhausting_memory(): void
+    {
+        [$session, $artwork] = $this->wallPrintSession('custom-a3-wall-print', 'overlay-owner');
+        // Swap in a large opaque scene like the real ~11 MP composition_source: a full-size decode
+        // plus a same-size truecolor buffer would overflow a default web memory_limit and blank the overlay.
+        $bigKey = 'artwork/generated/'.uniqid().'-big-composition.png';
+        Storage::disk('local')->put($bigKey, $this->artworkPng(1600, 2400));
+        $artwork->update(['storage_key' => $bigKey, 'width' => 1600, 'height' => 2400]);
+
+        $response = $this->withCookie('cattie_guest_token', 'overlay-owner')
+            ->get(route('artwork.assets', [$session->public_id, $artwork, 'trim' => 1]));
+
+        $response->assertOk();
+        $size = getimagesizefromstring($response->getContent());
+        $this->assertNotFalse($size);
+        $this->assertSame('image/png', $size['mime']);
+        $this->assertLessThanOrEqual(1200, max($size[0], $size[1]), 'The editor overlay must be downscaled to the editor canvas size.');
+    }
+
     private function wallPrintSession(string $slug, string $token): array
     {
         $product = Product::query()->where('slug', $slug)->with(['variants', 'artworkStyles'])->firstOrFail();

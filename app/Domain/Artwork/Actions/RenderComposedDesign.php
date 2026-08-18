@@ -44,19 +44,18 @@ class RenderComposedDesign
         );
         $printArea = $definition['output_size']['print_area'] ?? 'default';
         $size = $session->variant->requiredPrintResolution($printArea);
+        // The source asset is decoded at full print scale on BOTH paths — the preview only
+        // downscales the canvas, never the source — so budget memory from the full print
+        // resolution before the decode below. Wall prints upscale the character to a 4096px
+        // long edge, whose decode alone (~44 MB) tips a default 128 MB limit; the preview
+        // canvas (~1 MP) would keep the guard silent, so it must run on the full size here.
+        $this->ensureMemoryForCanvas($size['width'], $size['height']);
         if (! $fullResolution) {
             $scale = min(1, self::PREVIEW_MAX_EDGE / max($size['width'], $size['height']));
             $size = [
                 'width' => max(1, (int) round($size['width'] * $scale)),
                 'height' => max(1, (int) round($size['height'] * $scale)),
             ];
-        } else {
-            // Large print areas (wall prints: A3 ≈ 17 MP, A2 ≈ 35 MP at 300 DPI) hold a
-            // full truecolor canvas plus its PNG encode buffer at once, which can exceed a
-            // default memory_limit. Raise it (never lower it) for the render rather than
-            // dropping the print DPI. For production robustness the full-resolution render
-            // should move to a queued job — see the plan's reported limitation.
-            $this->ensureMemoryForCanvas($size['width'], $size['height']);
         }
         $personalisation = collect($session->personalisation_snapshot)->keyBy('key');
         $sourceBytes = Storage::disk($asset->disk)->get($asset->storage_key);
@@ -104,17 +103,19 @@ class RenderComposedDesign
 
         try {
             $editorBackgroundBytes = null;
+            $variantOptions = $session->variant->options ?? [];
             foreach ($definition['layers'] as $layer) {
-                if (($layer['type'] ?? null) === 'generation_asset') {
+                $isCharacter = ($layer['type'] ?? null) === 'generation_asset';
+                if ($isCharacter) {
+                    // The editor background is the composed surface WITHOUT the character, so
+                    // snapshot the editor canvas before the character layer is drawn (the
+                    // generation asset is only ever painted onto the full print canvas).
                     $editorBackgroundBytes = $this->previewBytes($editorCanvas);
                 }
-                match ($layer['type'] ?? null) {
-                    'transparent' => [$this->renderTransparent($canvas), $this->renderTransparent($editorCanvas)],
-                    'context_background' => [$this->renderContextBackground($canvas, $background, $definition[$layer['config'] ?? ''] ?? []), $this->renderContextBackground($editorCanvas, $background, $definition[$layer['config'] ?? ''] ?? [])],
-                    'personalisation_text_pattern' => [$this->renderTextPattern($canvas, $layer, $definition, $personalisation->all(), $template, $session->variant->options ?? []), $this->renderTextPattern($editorCanvas, $layer, $definition, $personalisation->all(), $template, $session->variant->options ?? [])],
-                    'generation_asset' => $this->renderGenerationAsset($canvas, $source, $layer, $definition[$layer['config'] ?? ''] ?? [], $characterAdjustments, $definition['character_clip'] ?? ['mode' => 'canvas']),
-                    default => throw new RuntimeException('The design template contains an unsupported layer.'),
-                };
+                $this->applyLayer($canvas, $layer, $definition, $source, $background, $personalisation, $template, $variantOptions, $characterAdjustments);
+                if (! $isCharacter) {
+                    $this->applyLayer($editorCanvas, $layer, $definition, $source, $background, $personalisation, $template, $variantOptions, $characterAdjustments);
+                }
             }
 
             $fullBytes = null;
@@ -175,6 +176,111 @@ class RenderComposedDesign
             Storage::disk('local')->delete(array_filter([$fullKey, $previewKey, $editorBackgroundKey]));
             throw $e;
         }
+    }
+
+    /**
+     * Render the full-resolution print PNG for an already-approved design and attach it to
+     * the row (`storage_key`). This runs on the queue worker (App\Jobs\RenderComposedDesignPrint)
+     * so the heavy full-scale canvas never allocates inside a web request. It composes from
+     * the design's own stored manifest and adjustments, so the print matches the approved
+     * preview exactly. Idempotent: a design that already has a print file is left untouched.
+     */
+    public function renderPrintFile(ComposedDesign $design): void
+    {
+        if ($design->storage_key) {
+            return;
+        }
+        $design->loadMissing(['artworkSession.product.designTemplate', 'variant']);
+        $session = $design->artworkSession;
+        $template = $session?->product?->designTemplate;
+        $definition = $design->resolved_manifest['configuration'] ?? null;
+        if (! $session || ! $template || ! $design->variant || ! is_array($definition)) {
+            throw new RuntimeException('The approved design inputs are incomplete.');
+        }
+        $asset = GenerationAsset::query()->with('generation')->findOrFail($design->generation_asset_id);
+
+        $printArea = $definition['output_size']['print_area'] ?? 'default';
+        $size = $design->variant->requiredPrintResolution($printArea);
+        $this->ensureMemoryForCanvas($size['width'], $size['height']);
+
+        $personalisation = collect($design->personalisation_snapshot)->keyBy('key');
+        $characterAdjustments = $design->character_adjustments ?? [];
+        $variantOptions = $design->variant->options ?? [];
+
+        $sourceBytes = Storage::disk($asset->disk)->get($asset->storage_key);
+        $source = $sourceBytes === null ? false : @imagecreatefromstring($sourceBytes);
+        unset($sourceBytes);
+        if (! $source) {
+            throw new RuntimeException('The generation asset is unreadable.');
+        }
+
+        $background = null;
+        $backgroundAsset = $asset->generation?->assets()->where('kind', 'context_background')->first();
+        if ($backgroundAsset) {
+            $backgroundBytes = Storage::disk($backgroundAsset->disk)->get($backgroundAsset->storage_key);
+            $background = $backgroundBytes === null ? null : @imagecreatefromstring($backgroundBytes);
+            unset($backgroundBytes);
+        }
+
+        $canvas = imagecreatetruecolor($size['width'], $size['height']);
+        if (! $canvas) {
+            imagedestroy($source);
+            if ($background instanceof \GdImage) {
+                imagedestroy($background);
+            }
+            throw new RuntimeException('The design canvas could not be created.');
+        }
+        imagealphablending($canvas, false);
+        imagesavealpha($canvas, true);
+        imagefill($canvas, 0, 0, imagecolorallocatealpha($canvas, 0, 0, 0, 127));
+        imagealphablending($canvas, true);
+
+        try {
+            foreach ($definition['layers'] as $layer) {
+                $this->applyLayer($canvas, $layer, $definition, $source, $background, $personalisation, $template, $variantOptions, $characterAdjustments);
+            }
+            if (! imageresolution($canvas, $size['dpi'], $size['dpi'])) {
+                throw new RuntimeException('The print resolution metadata could not be set.');
+            }
+            ob_start();
+            if (! imagepng($canvas, null, 6)) {
+                throw new RuntimeException('The full design could not be encoded.');
+            }
+            $fullBytes = ob_get_clean();
+        } catch (Throwable $e) {
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            throw $e;
+        } finally {
+            imagedestroy($source);
+            imagedestroy($canvas);
+            if ($background instanceof \GdImage) {
+                imagedestroy($background);
+            }
+        }
+
+        $key = "artwork-sessions/{$session->public_id}/composed-designs/".bin2hex(random_bytes(20)).'.png';
+        if (! $fullBytes || ! Storage::disk('local')->put($key, $fullBytes)) {
+            throw new RuntimeException('The composed print file could not be stored.');
+        }
+        $design->update([
+            'storage_key' => $key,
+            'width' => $size['width'],
+            'height' => $size['height'],
+            'format' => 'png',
+        ]);
+    }
+
+    private function applyLayer(\GdImage $canvas, array $layer, array $definition, \GdImage $source, ?\GdImage $background, \Illuminate\Support\Collection $personalisation, ProductDesignTemplate $template, array $variantOptions, array $characterAdjustments): void
+    {
+        match ($layer['type'] ?? null) {
+            'transparent' => $this->renderTransparent($canvas),
+            'context_background' => $this->renderContextBackground($canvas, $background, $definition[$layer['config'] ?? ''] ?? []),
+            'personalisation_text_pattern' => $this->renderTextPattern($canvas, $layer, $definition, $personalisation->all(), $template, $variantOptions),
+            'generation_asset' => $this->renderGenerationAsset($canvas, $source, $layer, $definition[$layer['config'] ?? ''] ?? [], $characterAdjustments, $definition['character_clip'] ?? ['mode' => 'canvas']),
+            default => throw new RuntimeException('The design template contains an unsupported layer.'),
+        };
     }
 
     private function constrainCharacterAdjustments(array $adjustments, array $character, array $limits): array
@@ -554,21 +660,37 @@ class RenderComposedDesign
 
     public function trimTransparentImage(string $bytes): string
     {
+        // Wall-print sources are large opaque scenes (~11 MP composition_source); decoding one
+        // plus a same-size truecolor buffer overflows a default web memory_limit, which 500s the
+        // editor overlay request and leaves it blank. Budget memory from the source size first.
+        $info = @getimagesizefromstring($bytes);
+        if ($info !== false) {
+            $this->ensureMemoryForCanvas((int) $info[0], (int) $info[1]);
+        }
         $source = @imagecreatefromstring($bytes);
         if (! $source) {
             throw new RuntimeException('The generation asset is unreadable.');
         }
         $bounds = $this->opaqueBounds($source);
-        $trimmed = imagecreatetruecolor($bounds['width'], $bounds['height']);
+
+        // The overlay is only ever shown inside the ~1200px editor canvas, so downscale large
+        // sources — no visible loss, and it keeps the response light instead of shipping an
+        // 11 MP PNG on every character move/zoom. Resample straight from the opaque region into
+        // the final (downscaled) canvas, so no full-size intermediate buffer is held.
+        $scale = min(1, self::PREVIEW_MAX_EDGE / max($bounds['width'], $bounds['height']));
+        $width = max(1, (int) round($bounds['width'] * $scale));
+        $height = max(1, (int) round($bounds['height'] * $scale));
+        $trimmed = imagecreatetruecolor($width, $height);
         imagealphablending($trimmed, false);
         imagesavealpha($trimmed, true);
         imagefill($trimmed, 0, 0, imagecolorallocatealpha($trimmed, 0, 0, 0, 127));
-        imagecopy($trimmed, $source, 0, 0, $bounds['x'], $bounds['y'], $bounds['width'], $bounds['height']);
+        imagecopyresampled($trimmed, $source, 0, 0, $bounds['x'], $bounds['y'], $width, $height, $bounds['width'], $bounds['height']);
+        imagedestroy($source);
+
         ob_start();
         imagepng($trimmed);
         $result = ob_get_clean();
         imagedestroy($trimmed);
-        imagedestroy($source);
 
         return $result;
     }

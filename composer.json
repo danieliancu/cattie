@@ -52,7 +52,7 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php -d memory_limit=256M artisan queue:work --tries=2 --timeout=240\" \"npm run dev\" --names=server,queue,vite"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php -d memory_limit=512M artisan queue:work --tries=2 --timeout=240\" \"npm run dev\" --names=server,queue,vite"
         ]
     },
     "extra": {

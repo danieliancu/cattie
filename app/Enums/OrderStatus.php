@@ -2,7 +2,10 @@
 
 namespace App\Enums;
 
-enum OrderStatus: string
+use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasLabel;
+
+enum OrderStatus: string implements HasColor, HasLabel
 {
     case Draft = 'draft';
     case Personalising = 'personalising';
@@ -37,6 +40,23 @@ enum OrderStatus: string
             self::PaymentFailed => 'Payment issue',
             self::Cancelled => 'Cancelled',
             self::Refunded => 'Refunded',
+        };
+    }
+
+    public function getLabel(): string
+    {
+        return $this->customerLabel();
+    }
+
+    // Badge colours for the admin (Filament) — mirrors the storefront order-status pill
+    // (resources/views/components/order-status-pill.blade.php) so "Paid" reads green everywhere.
+    public function getColor(): string|array|null
+    {
+        return match ($this) {
+            self::Paid, self::Delivered => 'success',
+            self::Cancelled, self::Refunded, self::GenerationFailed, self::PaymentFailed, self::FulfilmentFailed => 'danger',
+            self::Shipped, self::InProduction, self::SubmittedToFulfilment, self::PreparingPrintAsset => 'info',
+            default => 'gray',
         };
     }
 }

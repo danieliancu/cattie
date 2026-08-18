@@ -1,4 +1,4 @@
-<section class="{{ in_array($session->status->value, ['preparing_photo', 'generating']) ? 'fixed inset-0 z-50 overflow-hidden' : 'shell pb-0 pt-4 sm:py-20' }}" @if(in_array($session->status->value, ['preparing_photo', 'generating'])) x-data="artworkProgress(@js(route('artwork.status', $session->public_id)), @js(config('artwork.poll_interval_ms')), @js($session->processing_stage?->value ?? ($session->status->value === 'preparing_photo' ? 'preparing_photo' : 'creating_illustration')))" x-init="start()" @endif>
+<section class="{{ in_array($session->status->value, ['preparing_photo', 'generating']) ? 'fixed inset-0 z-50 overflow-hidden' : 'shell pb-0 pt-4 sm:py-20' }}" @if(in_array($session->status->value, ['preparing_photo', 'generating'])) x-data="artworkProgress(@js(route('artwork.status', $session->public_id)), @js(config('artwork.poll_interval_ms')), @js($session->processing_stage?->value ?? ($session->status->value === 'preparing_photo' ? 'preparing_photo' : 'creating_illustration')), @js(\App\Enums\ArtworkProcessingStage::RemovingBackground->label($session->product->keepsPhotoBackground())))" x-init="start()" @endif>
     <div class="{{ in_array($session->status->value, ['preparing_photo', 'generating']) ? 'h-full w-full' : 'mx-auto w-full min-w-0 max-w-5xl overflow-x-clip' }}">
         @if($session->status->value === 'awaiting_upload')
             <div class="mx-auto mt-8 max-w-2xl text-center">
@@ -153,7 +153,7 @@
                         <div x-show="previewMode === 'design'" x-ref="editorCanvas" class="relative w-full min-w-0 max-w-full rounded-[2.5rem]" style="aspect-ratio: {{ $designWidth }} / {{ $designHeight }}" :style="`aspect-ratio: {{ $designWidth }} / {{ $designHeight }}; background-color: ${surfaceColour}`">
                             {{-- Clipped artwork layer: the print image never spills outside the preview area. --}}
                             <div class="absolute inset-0 overflow-hidden rounded-[2.5rem]">
-                                <img x-show="!editable" :src="selectedDesignUrl" alt="Your flat personalised print design" class="h-full w-full object-contain">
+                                <img x-show="!editable" :src="withBust(selectedDesignUrl)" x-on:load="onPreviewLoad('flat')" x-on:error="onPreviewError('flat')" alt="Your flat personalised print design" class="h-full w-full object-contain">
                                 <template x-if="editable">
                                     <div class="absolute inset-0">
                                         <img :src="editorBackgroundUrl" alt="Your personalised design background" class="h-full w-full object-contain">
@@ -161,7 +161,7 @@
                                             <div class="absolute overflow-visible" :style="characterZoneStyle()">
                                                 <div class="absolute inset-0 overflow-visible">
                                                     <div class="absolute" :style="`left:${50 + (offsetX / characterWidth * 100)}%; top:${50 + (offsetY / characterHeight * 100)}%; width:${scale * 100}%; height:${scale * 100}%; transform:translate(-50%,-50%)`">
-                                                        <img :src="characterUrl" alt="Your AI character" class="pointer-events-none h-full w-full select-none" :class="characterFit === 'cover' ? 'object-cover' : 'object-contain'">
+                                                        <img :src="withBust(characterUrl)" x-on:load="onPreviewLoad('character')" x-on:error="onPreviewError('character')" alt="Your AI character" class="pointer-events-none h-full w-full select-none" :class="characterFit === 'cover' ? 'object-cover' : 'object-contain'">
                                                     </div>
                                                 </div>
                                             </div>
@@ -192,6 +192,10 @@
                                 </div>
                             </template>
 
+                            <div x-show="!imageReady" class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-[2.5rem] bg-white/70" role="status" aria-live="polite">
+                                <span class="h-9 w-9 animate-spin rounded-full border-4 border-ink/20 border-t-ink" aria-hidden="true"></span>
+                                <span class="text-xs font-medium text-muted">Waiting…</span>
+                            </div>
                             <div x-show="updatingName" class="absolute inset-0 flex items-center justify-center rounded-[2.5rem] bg-white/65" aria-live="polite">
                                 <span class="rounded-full bg-ink px-4 py-2 text-sm font-bold text-white">Updating name…</span>
                             </div>
@@ -296,11 +300,11 @@
 
 <script>
 document.addEventListener('alpine:init', () => {
-    Alpine.data('artworkProgress', (url, interval, initialStage) => ({
+    Alpine.data('artworkProgress', (url, interval, initialStage, removingBackgroundLabel) => ({
         steps: [
             {key: 'preparing_photo', label: 'Preparing your photo…', progress: 10},
             {key: 'creating_illustration', label: 'Creating your illustration…', progress: 30},
-            {key: 'removing_background', label: 'Removing the background…', progress: 55},
+            {key: 'removing_background', label: removingBackgroundLabel, progress: 55},
             {key: 'preparing_preview', label: 'Preparing your preview…', progress: 80},
             {key: 'ready', label: 'Your artwork is ready', progress: 100},
         ],
@@ -411,6 +415,30 @@ document.addEventListener('alpine:init', () => {
         layoutError: '',
         nameError: '',
         transformMode: null,
+        // Preview loading: show a spinner until the visible design image loads; on error keep
+        // retrying automatically by cache-busting the src (transient failure / not written yet).
+        imageReady: false,
+        imageBust: 0,
+        imageRetryTimer: null,
+        withBust(url) {
+            if (! url) return url;
+            return this.imageBust ? url + (url.includes('?') ? '&' : '?') + 'retry=' + this.imageBust : url;
+        },
+        previewImageActive(kind) {
+            // Only the image actually on screen gates the spinner: the flat composed image when
+            // not editable, the character overlay when editable (the hidden one still fires load).
+            return kind === (this.editable ? 'character' : 'flat');
+        },
+        onPreviewLoad(kind) {
+            if (this.previewImageActive(kind)) this.imageReady = true;
+        },
+        onPreviewError(kind) {
+            if (! this.previewImageActive(kind)) return;
+            this.imageReady = false;
+            clearTimeout(this.imageRetryTimer);
+            const delay = Math.min(4000, 800 * (this.imageBust + 1));
+            this.imageRetryTimer = setTimeout(() => { this.imageBust++; }, delay);
+        },
         characterClipStyle() {
             if ((this.characterClip?.mode || 'canvas') !== 'custom') return '';
             const top = Number(this.characterClip.y) * 100;
