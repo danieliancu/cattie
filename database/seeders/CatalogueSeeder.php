@@ -57,6 +57,14 @@ class CatalogueSeeder extends Seeder
         $this->seedCustomWallPrints();
         // Runs last: the taxonomy assigns the products seeded above.
         $this->call(CategoryTaxonomySeeder::class);
+
+        // Products carry is_active, but storefront visibility also depends on
+        // `status` (Product::scopeActive requires status=published). On a fresh
+        // migrate:fresh + seed, the one-time migration that back-filled status
+        // ran against an empty table, so sync it here to keep seeded products
+        // visible instead of stuck on the default draft status.
+        Product::query()->where('is_active', true)->update(['status' => ProductStatus::Published->value]);
+        Product::query()->where('is_active', false)->update(['status' => ProductStatus::Archived->value]);
     }
 
     private function seedProdigiWaterBottle(): void
