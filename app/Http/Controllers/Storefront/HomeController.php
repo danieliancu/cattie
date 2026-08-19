@@ -13,10 +13,10 @@ class HomeController extends Controller
     public function __invoke(): View
     {
         return view('storefront.home', [
-            'featuredProducts' => Product::query()->active()->ordered()->with(['images', 'variants' => fn ($query) => $query->active()->ordered()])->limit(4)->get(),
+            'featuredProducts' => Product::query()->active()->ordered()->with(['images', 'variants' => fn ($query) => $query->active()->ordered()])->limit(8)->get(),
             'artworkStyles' => ArtworkStyle::query()->where('is_active', true)->orderBy('name')->get(),
-            // The four top-level categories, shown whether or not they yet hold products.
-            'categories' => CatalogueNavigation::topLevelWithChildren(),
+            // The four top-level categories with featured products, shown whether or not they yet hold products.
+            'categories' => CatalogueNavigation::attachFeaturedProducts(CatalogueNavigation::topLevelWithChildren(), limit: 8),
         ]);
     }
 }

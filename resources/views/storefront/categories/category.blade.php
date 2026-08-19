@@ -1,7 +1,7 @@
 <x-layouts.storefront :title="$category->meta_title ?: $category->name.' | Personalised Gifts | Kattie.uk'" :description="$category->meta_description ?: $category->short_description" :canonical="$canonical">
     <nav class="shell pt-10 text-sm text-muted" aria-label="Breadcrumb"><ol class="flex flex-wrap items-center gap-2"><li><a class="hover:text-coral" href="{{ route('home') }}">Home</a></li><li aria-hidden="true">→</li><li aria-current="page">{{ $category->name }}</li></ol></nav>
 
-    <section class="shell py-12 sm:py-20">
+    <section class="shell py-4 sm:py-20">
         <div class="max-w-2xl"><p class="eyebrow hidden sm:block">Personalised gifts</p><h1 class="font-display text-2xl sm:mt-4 sm:text-6xl">{{ $category->name }}</h1>@if($category->short_description)<x-expandable-text :text="$category->short_description" />@endif</div>
 
         @if($category->children->isNotEmpty())

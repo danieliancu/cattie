@@ -1,11 +1,11 @@
 import './bootstrap';
 import './embedded-checkout';
 import Alpine from 'alpinejs';
-import { ChevronDown, createIcons, Heart, LockKeyhole, Map, Menu, RotateCcw, Search, ShieldCheck, ShoppingCart, UserRound, X } from 'lucide';
+import { ArrowRight, Backpack, ChevronDown, CloudUpload, createIcons, Gift, Heart, Image, LockKeyhole, Map, Menu, Paintbrush, PawPrint, RotateCcw, Search, ShieldCheck, ShoppingCart, Sparkles, Truck, UserRound, WandSparkles, X } from 'lucide';
 
 window.Alpine = Alpine;
 Alpine.start();
 
 createIcons({
-    icons: {ChevronDown, Heart, LockKeyhole, Map, Menu, RotateCcw, Search, ShieldCheck, ShoppingCart, UserRound, X},
+    icons: {ArrowRight, Backpack, ChevronDown, CloudUpload, Gift, Heart, Image, LockKeyhole, Map, Menu, Paintbrush, PawPrint, RotateCcw, Search, ShieldCheck, ShoppingCart, Sparkles, Truck, UserRound, WandSparkles, X},
 });

@@ -19,17 +19,28 @@ class ProductController extends Controller
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('q', ''));
+        // Search by words, not the whole phrase: every meaningful word must appear in the
+        // name/description or a category (any order), so "print for wall" matches "Wall Print".
+        // Common connector words are ignored so they don't disqualify a match.
+        $stopWords = ['for', 'the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'on', 'with', 'my', 'your'];
+        $allWords = collect(preg_split('/\s+/', mb_strtolower($search), -1, PREG_SPLIT_NO_EMPTY));
+        $meaningful = $allWords->reject(fn ($word) => in_array($word, $stopWords, true));
+        $terms = ($meaningful->isNotEmpty() ? $meaningful : $allWords)->values();
         $products = Product::query()
-            ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search) {
-                $query->where('name', 'like', '%'.$search.'%')
-                    ->orWhere('short_description', 'like', '%'.$search.'%')
-                    ->orWhere('description', 'like', '%'.$search.'%')
-                    ->orWhereHas('categories', fn ($query) => $query->active()->where(function ($query) use ($search) {
-                        $query->where('name', 'like', '%'.$search.'%')
-                            ->orWhere('short_description', 'like', '%'.$search.'%')
-                            ->orWhere('description', 'like', '%'.$search.'%');
-                    }));
-            }))
+            ->when($search !== '' && $terms->isNotEmpty(), function ($query) use ($terms) {
+                foreach ($terms as $term) {
+                    $query->where(function ($query) use ($term) {
+                        $query->where('name', 'like', '%'.$term.'%')
+                            ->orWhere('short_description', 'like', '%'.$term.'%')
+                            ->orWhere('description', 'like', '%'.$term.'%')
+                            ->orWhereHas('categories', fn ($query) => $query->active()->where(function ($query) use ($term) {
+                                $query->where('name', 'like', '%'.$term.'%')
+                                    ->orWhere('short_description', 'like', '%'.$term.'%')
+                                    ->orWhere('description', 'like', '%'.$term.'%');
+                            }));
+                    });
+                }
+            })
             ->active()->ordered()
             ->with(['images', 'variants' => fn ($query) => $query->active()->ordered()])
             ->paginate(12)

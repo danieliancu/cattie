@@ -134,9 +134,10 @@ class ProductCategoryTest extends TestCase
 
         // The homepage grid lists the top-level categories only. Subcategories
         // stay in the header menu and on the category pages themselves.
-        $section = Str::between($content, 'Where would you like to start?', '</section>');
+        $section = Str::before(Str::after($content, 'Where would you like to start?'), '</section>');
         $this->assertStringNotContainsString(route('catalogue.subcategory', ['school-everyday', 'water-bottles']), $section);
-        $this->assertSame(2, substr_count($section, 'rounded-full'));
+        // Exactly the two top-level categories are tiled (each rendered as one card); the subcategory is not.
+        $this->assertSame(2, substr_count($section, 'aspect-square'));
     }
 
     public function test_related_products_prefer_shared_categories_then_fill_catalogue_order(): void

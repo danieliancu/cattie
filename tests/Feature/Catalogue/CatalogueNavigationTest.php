@@ -188,7 +188,7 @@ class CatalogueNavigationTest extends TestCase
     {
         $this->get(route('home'))->assertOk()
             ->assertSee('home-how-it-works', false)
-            ->assertSee('One photo. Four little steps.');
+            ->assertSee('Choose your gift');
     }
 
     public function test_category_page_lists_its_subcategories_as_pills(): void

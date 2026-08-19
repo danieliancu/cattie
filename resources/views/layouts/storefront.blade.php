@@ -14,7 +14,12 @@
 </head>
 <body class="overflow-x-clip bg-white text-ink antialiased">
 <a href="#main-content" class="skip-link">Skip to content</a>
-<header class="sticky top-0 z-40 border-b border-rose/20 bg-cream/95 backdrop-blur" x-data="{mobileMenu:false,mobileAccountOpen:false,mobileOpenMenu:null,desktopOpenMenu:null,searchOpen:false,searchQuery:@js((string) request('q', '')),searchProducts:@js($searchProducts),filteredProducts(){const query=this.searchQuery.trim().toLowerCase();return query===''?this.searchProducts:this.searchProducts.filter(product=>product.name.toLowerCase().includes(query))}}">
+{{-- Phone-only brand strip (mockup): desktop header stays exactly as before. --}}
+<div class="flex items-center justify-center gap-1.5 bg-blush/60 py-1.5 text-center text-[11px] font-semibold text-ink sm:hidden">
+    <i data-lucide="heart" class="h-3 w-3 text-coral" aria-hidden="true"></i>
+    <span>Made from a moment you love</span>
+</div>
+<header class="sticky top-0 z-40 border-b border-rose/20 bg-cream/95 backdrop-blur" x-data="{mobileMenu:false,mobileAccountOpen:false,mobileOpenMenu:null,desktopOpenMenu:null,searchOpen:false,searchQuery:@js((string) request('q', '')),searchProducts:@js($searchProducts),filteredProducts(){const stop=['for','the','a','an','and','or','to','of','in','on','with','my','your'];const raw=this.searchQuery.toLowerCase().split(/\s+/).filter(Boolean);const meaningful=raw.filter(w=>!stop.includes(w));const terms=meaningful.length?meaningful:raw;return terms.length===0?this.searchProducts:this.searchProducts.filter(product=>{const name=product.name.toLowerCase();return terms.every(w=>name.includes(w))})}}">
     <div class="shell py-4 lg:grid lg:grid-cols-[auto_minmax(240px,1fr)_auto] lg:items-center lg:gap-8">
         <div class="flex items-center justify-between pl-[50px]">
             <a href="{{ route('home') }}" class="brand relative ml-8 inline-flex lg:ml-0" aria-label="Kattie.uk home"><img src="{{ asset('images/icon.gif') }}" class="absolute -left-20 -bottom-5 z-[1] h-auto w-[85px] lg:-bottom-[25px]" alt="" aria-hidden="true">Kattie<span>.</span>uk<span class="absolute left-0 top-[calc(100%-6px)] whitespace-nowrap pl-[5px] font-sans text-[8px] font-light tracking-[0.8px] text-muted">LITTLE FACES. BIG LOVE</span></a>
@@ -102,7 +107,7 @@
                 @endforeach
                 <a href="{{ route('products.index') }}" class="nav-link block text-sm font-normal">Shop all</a>
             </div>
-            <a class="nav-link block" href="{{ route('home') }}#how-it-works">How it works</a>
+            <a class="nav-link block" href="{{ route('home') }}#how-it-works-mobile">How it works</a>
             <div class="flex items-center justify-between">
                 <a class="nav-link block flex-1 py-2" href="{{ route('order-support.create') }}">Order Support</a>
                 <button type="button" class="p-2" @click="mobileOpenMenu = mobileOpenMenu==='order-support' ? null : 'order-support'" :aria-expanded="mobileOpenMenu==='order-support'" aria-controls="mobile-order-support-links" aria-label="Toggle order support links"><i data-lucide="chevron-down" class="h-4 w-4 transition" :class="mobileOpenMenu==='order-support' ? 'rotate-180' : ''" aria-hidden="true"></i></button>
@@ -138,7 +143,7 @@
 </div>
 @endif
 <main id="main-content">{{ $slot }}</main>
-<footer class="mt-24 border-t border-rose/20 bg-cream/95">
+<footer class="mt-8 sm:mt-24 border-t border-rose/20 bg-cream/95">
     <div class="shell grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-[1.9fr_1fr_1fr_1fr_1fr] lg:gap-10">
         <div class="lg:pr-12 xl:pr-20">
             <div class="brand relative ml-11 inline-flex">Kattie<span>.</span>uk<img src="{{ asset('images/icon.gif') }}" class="absolute h-auto w-[65px]" style="left:-60px;bottom:-5px;" alt="" aria-hidden="true"><span class="absolute left-0 top-[calc(100%-6px)] whitespace-nowrap pl-[5px] font-sans text-[8px] font-light tracking-[0.8px] text-muted">LITTLE FACES. BIG LOVE</span></div>

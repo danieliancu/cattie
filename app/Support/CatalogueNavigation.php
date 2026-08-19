@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Enums\ProductStatus;
+use App\Models\Product;
 use App\Models\ProductCategory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -50,6 +51,77 @@ class CatalogueNavigation
                 ->each(fn (ProductCategory $child) => $child->setRelation('parent', $parent)));
 
         self::hydrateProductImages($tree);
+
+        return $tree;
+    }
+
+    /**
+     * Attaches up to $limit products to each top-level category in $tree, as
+     * ->featuredProducts. Products hang off leaf subcategories, so a parent's
+     * products are the union of its children's, deduplicated, in catalogue order.
+     *
+     * Two queries total, regardless of how many categories or products exist —
+     * same batching shape as hydrateProductImages().
+     *
+     * @param  Collection<int, ProductCategory>  $tree
+     * @return Collection<int, ProductCategory>
+     */
+    public static function attachFeaturedProducts(Collection $tree, int $limit = 8): Collection
+    {
+        // Map every child (and the parent itself, defensively) back to its top-level id.
+        $parentOf = [];
+        foreach ($tree as $parent) {
+            $parentOf[$parent->getKey()] = $parent->getKey();
+            foreach ($parent->children as $child) {
+                $parentOf[$child->getKey()] = $parent->getKey();
+            }
+        }
+
+        if ($parentOf === []) {
+            return $tree;
+        }
+
+        $rows = DB::table('product_category')
+            ->join('products', 'products.id', '=', 'product_category.product_id')
+            ->whereIn('product_category.product_category_id', array_keys($parentOf))
+            ->where('products.is_active', true)
+            ->where('products.status', ProductStatus::Published->value)
+            ->whereNull('products.deleted_at')
+            ->orderBy('product_category.sort_order')
+            ->orderBy('products.sort_order')
+            ->orderBy('products.name')
+            ->get(['product_category.product_category_id as category_id', 'product_category.product_id']);
+
+        // Group into ordered, deduped product-id lists per top-level parent, capped at $limit.
+        $idsByParent = [];
+        foreach ($rows as $row) {
+            $parentId = $parentOf[$row->category_id] ?? null;
+            if ($parentId === null) {
+                continue;
+            }
+            $idsByParent[$parentId] ??= [];
+            if (count($idsByParent[$parentId]) < $limit && ! in_array($row->product_id, $idsByParent[$parentId], true)) {
+                $idsByParent[$parentId][] = $row->product_id;
+            }
+        }
+
+        $neededIds = array_values(array_unique(array_merge(...array_values($idsByParent) ?: [[]])));
+
+        $productsById = $neededIds === []
+            ? collect()
+            : Product::query()
+                ->whereIn('id', $neededIds)
+                ->with(['images', 'variants' => fn ($query) => $query->active()->ordered()])
+                ->get()
+                ->keyBy('id');
+
+        foreach ($tree as $parent) {
+            $ids = $idsByParent[$parent->getKey()] ?? [];
+            $parent->setRelation(
+                'featuredProducts',
+                collect($ids)->map(fn ($id) => $productsById->get($id))->filter()->values()
+            );
+        }
 
         return $tree;
     }
