@@ -52,7 +52,7 @@ return new class extends Migration
             $t->string('test_render_disk')->nullable();
             $t->string('test_render_storage_key')->nullable();
             $t->timestamps();
-            $t->unique(['product_design_template_id', 'version']);
+            $t->unique(['product_design_template_id', 'version'], 'dtv_template_version_unique');
         });
         Schema::create('design_template_assignments', function (Blueprint $t) {
             $t->ulid('id')->primary();
