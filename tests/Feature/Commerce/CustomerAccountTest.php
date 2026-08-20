@@ -82,7 +82,7 @@ class CustomerAccountTest extends TestCase
         $this->get(route('account.index'))->assertRedirect(route('login'));
         $this->get(route('home'))->assertOk()->assertSee(route('login'))->assertSee('Create an account');
         $user = User::factory()->create(['name' => null, 'is_admin' => false]);
-        $this->actingAs($user)->get(route('account.index'))->assertOk()->assertSee('No orders yet')->assertSee('Shop personalised gifts')
+        $this->actingAs($user)->get(route('account.index'))->assertOk()->assertSee('Your name')->assertSee('Change password')->assertSee('Delete account')
             ->assertSee('action="/logout"', false)->assertSee('name="_token"', false);
         $this->actingAs($user)->get(route('home'))->assertOk()->assertSee(route('account.index'))->assertSee('My Orders')->assertSee('Sign out');
     }

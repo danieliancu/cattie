@@ -4,6 +4,7 @@ use App\Http\Controllers\Storefront\AddressAutocompleteController;
 use App\Http\Controllers\Storefront\AddressLookupController;
 use App\Http\Controllers\Storefront\ArtworkController;
 use App\Http\Controllers\Storefront\AccountController;
+use App\Http\Controllers\Storefront\AccountSecurityController;
 use App\Http\Controllers\Storefront\CartController;
 use App\Http\Controllers\Storefront\CustomerProfileController;
 use App\Http\Controllers\Storefront\CheckoutController;
@@ -44,6 +45,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/account/orders/{orderNumber}/items/{item}/artwork', [AccountController::class, 'artwork'])->name('account.orders.artwork');
         Route::get('/account/details', [CustomerProfileController::class, 'edit'])->name('account.details');
         Route::patch('/account/details', [CustomerProfileController::class, 'update'])->middleware('throttle:60,1')->name('account.details.update');
+        Route::put('/account/password', [AccountSecurityController::class, 'updatePassword'])->middleware('throttle:10,1')->name('account.password.update');
+        Route::delete('/account', [AccountSecurityController::class, 'destroy'])->middleware('throttle:10,1')->name('account.destroy');
     });
 });
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');

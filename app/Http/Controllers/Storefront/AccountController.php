@@ -13,9 +13,14 @@ final class AccountController extends Controller
 {
     public function index(Request $request): View
     {
-        $orders = $request->user()->orders()->withCount('items')->latest('placed_at')->latest('created_at')->limit(3)->get();
+        $user = $request->user();
+        $profile = $user->customerProfile;
 
-        return view('storefront.account.index', compact('orders'));
+        return view('storefront.account.index', [
+            'firstName' => $profile?->first_name,
+            'lastName' => $profile?->last_name,
+            'hasPassword' => $user->password !== null,
+        ]);
     }
 
     public function orders(Request $request): View
