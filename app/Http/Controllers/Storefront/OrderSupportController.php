@@ -5,13 +5,16 @@ namespace App\Http\Controllers\Storefront;
 use App\Domain\Artwork\Actions\RecordAnalyticsEvent;
 use App\Domain\Orders\Actions\CreateOrderSupportRequest;
 use App\Http\Controllers\Controller;
+use App\Mail\OrderSupportAcknowledgementMail;
 use App\Models\Order;
 use App\Support\GuestContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use RuntimeException;
+use Throwable;
 
 class OrderSupportController extends Controller
 {
@@ -105,6 +108,15 @@ class OrderSupportController extends Controller
             return back()->withInput()->withErrors([
                 'photo' => "We couldn't process your submission. Please try again.",
             ]);
+        }
+
+        // Acknowledge the request by email; a mail hiccup must not fail the submission.
+        if ($contactEmail) {
+            try {
+                Mail::to($contactEmail)->queue(new OrderSupportAcknowledgementMail($supportRequest));
+            } catch (Throwable $e) {
+                report($e);
+            }
         }
 
         $request->session()->put('order_support_reference', $supportRequest->reference);

@@ -3,12 +3,14 @@
 namespace Tests\Feature\Commerce;
 
 use App\Enums\OrderStatus;
+use App\Mail\OrderSupportAcknowledgementMail;
 use App\Models\Order;
 use App\Models\OrderSupportRequest;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -206,6 +208,31 @@ class OrderSupportTest extends TestCase
         ]);
 
         $this->assertSame(1, OrderSupportRequest::query()->count());
+    }
+
+    public function test_submitting_support_queues_an_acknowledgement_email_to_the_customer(): void
+    {
+        Mail::fake();
+        Order::factory()->create(['number' => 'CAT-ACK-1', 'email' => 'guest@example.com']);
+
+        $this->post(route('order-support.store'), [
+            'order_number' => 'CAT-ACK-1', 'email' => 'guest@example.com', 'message' => 'Please help with my order.',
+        ])->assertRedirect(route('order-support.submitted'));
+
+        $support = OrderSupportRequest::query()->firstOrFail();
+        Mail::assertQueued(OrderSupportAcknowledgementMail::class, fn ($m) => $m->hasTo('guest@example.com') && $m->supportRequest->is($support));
+    }
+
+    public function test_acknowledgement_email_renders_with_reference_message_and_order(): void
+    {
+        Order::factory()->create(['number' => 'CAT-ACK-2', 'email' => 'guest@example.com']);
+        $this->post(route('order-support.store'), ['order_number' => 'CAT-ACK-2', 'email' => 'guest@example.com', 'message' => 'A rendered message body.']);
+        $support = OrderSupportRequest::query()->firstOrFail();
+
+        $html = (new OrderSupportAcknowledgementMail($support))->render();
+        $this->assertStringContainsString($support->reference, $html);
+        $this->assertStringContainsString('A rendered message body.', $html);
+        $this->assertStringContainsString('CAT-ACK-2', $html);
     }
 
     public function test_support_request_links_to_correct_order(): void
