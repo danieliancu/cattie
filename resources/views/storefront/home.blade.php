@@ -171,11 +171,11 @@
     </section>
     {{-- ===== Trustpilot-style 5-star review carousel (above the footer) ===== --}}
     @php($reviews = [
-        ['1.jfif', 'Sarah M.', 'Manchester', 'Absolutely magical — my little girl gasped when she saw her cartoon. The print quality is gorgeous.'],
+        ['1.jfif', 'David H.', 'Manchester', 'Absolutely magical — my little girl gasped when she saw her cartoon. The print quality is gorgeous.'],
         ['2.jfif', 'James P.', 'Bristol', 'Ordered a bottle with our dog on it and it looks exactly like him. Fast delivery too!'],
         ['3.jfif', 'Emily R.', 'Leeds', 'The wall print is now the centrepiece of our living room. Everyone asks where we got it.'],
         ['4.jfif', 'Chloe T.', 'Glasgow', 'Such a thoughtful gift for my mum. She cried happy tears. Will definitely order again.'],
-        ['5.jfif', 'David H.', 'London', 'From photo to artwork in minutes, and it looked stunning. Couldn’t be happier.'],
+        ['5.jfif', 'Sarah M.', 'London', 'From photo to artwork in minutes, and it looked stunning. Couldn’t be happier.'],
     ])
     <section class="pt-14 pb-4">
         <div class="shell text-center">

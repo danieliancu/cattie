@@ -30,13 +30,15 @@ class HomeController extends Controller
      */
     private function heroTiles(): array
     {
+        // The first three carry a specific catalogue image (by filename); the rest
+        // are pale-circle placeholders until their products and imagery are ready.
         $config = [
-            ['name' => 'Water Bottle with Red Flip Lid', 'withImage' => true],
-            ['name' => 'Small Plastic Lunchbox', 'withImage' => true],
-            ['name' => 'Personalised Stationery & Pencil Tin', 'withImage' => true],
-            ['name' => 'Custom A3 Wall Print', 'withImage' => false],
-            ['name' => 'Personalised School Backpack', 'withImage' => false],
-            ['name' => 'Personalised Pet Bowl', 'withImage' => false],
+            ['name' => 'Water Bottle with Red Flip Lid', 'image' => 'anna-product-2.png'],
+            ['name' => 'Small Plastic Lunchbox', 'image' => '7becfb33-e340-41a4-86cd-b7c51decce87.png'],
+            ['name' => 'Personalised Stationery & Pencil Tin', 'image' => '654479a4-4a59-4630-9d59-6c469a42e78e.png'],
+            ['name' => 'Custom A3 Wall Print', 'image' => null],
+            ['name' => 'Personalised School Backpack', 'image' => null],
+            ['name' => 'Personalised Pet Bowl', 'image' => null],
         ];
 
         $products = Product::query()->active()
@@ -45,11 +47,16 @@ class HomeController extends Controller
 
         return array_map(function (array $tile) use ($products) {
             $product = $products->get($tile['name']);
+            $image = null;
+            if ($tile['image'] !== null && $product) {
+                $image = $product->images
+                    ->first(fn ($img) => str_ends_with($img->storage_key, $tile['image']))?->url();
+            }
 
             return [
                 'name' => $tile['name'],
                 'url' => $product ? route('products.show', $product->slug) : null,
-                'image' => $tile['withImage'] && $product ? $product->primaryImage()?->url() : null,
+                'image' => $image,
             ];
         }, $config);
     }
