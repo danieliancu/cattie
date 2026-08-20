@@ -7,6 +7,7 @@ use App\Domain\Artwork\Actions\RenderComposedDesign;
 use App\Domain\Artwork\Actions\RequestArtworkGeneration;
 use App\Domain\Artwork\Actions\StartArtworkSession;
 use App\Domain\Artwork\Actions\StoreArtworkUpload;
+use App\Contracts\PhotoModerator;
 use App\Enums\ArtworkSessionStatus;
 use App\Enums\ArtworkProcessingStage;
 use App\Enums\GenerationStatus;
@@ -39,6 +40,9 @@ class ArtworkController extends Controller
     {
         abort_unless($product->is_active, 404);
         $file = $this->validatedPhoto($request);
+        if ($reason = $this->moderationRejection($file)) {
+            return redirect()->route('products.show', $product->slug)->with('moderation_reason', $reason);
+        }
         [$session,$token] = $start->handle($product, $request->all(), $request->cookie('cattie_guest_token'));
         $store->handle($session, file_get_contents($file->getRealPath()), $file->getMimeType(), $file->getClientOriginalName());
 
@@ -85,9 +89,20 @@ class ArtworkController extends Controller
             return redirect()->route('products.show', $session->product->slug);
         }
         $file = $this->validatedPhoto($request);
+        if ($reason = $this->moderationRejection($file)) {
+            return redirect()->route('products.show', $session->product->slug)->with('moderation_reason', $reason);
+        }
         $store->handle($session, file_get_contents($file->getRealPath()), $file->getMimeType(), $file->getClientOriginalName());
 
         return redirect()->route('products.show', $session->product->slug);
+    }
+
+    /** Runs the uploaded photo through content moderation; returns a rejection reason or null. */
+    private function moderationRejection($file): ?string
+    {
+        $result = app(PhotoModerator::class)->moderate($file->getRealPath(), (string) $file->getMimeType());
+
+        return $result->allowed ? null : $result->reason;
     }
 
     private function validatedPhoto(Request $request)

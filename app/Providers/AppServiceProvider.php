@@ -7,6 +7,7 @@ use App\Contracts\BackgroundRemovalRunner;
 use App\Contracts\ImageGenerationProvider;
 use App\Contracts\ImageUpscaler;
 use App\Contracts\PaymentProvider;
+use App\Contracts\PhotoModerator;
 use App\Domain\Cart\Actions\ResolveGuestCart;
 use App\Domain\Payments\Contracts\ShippingResolver;
 use App\Domain\Payments\Contracts\TaxResolver;
@@ -28,8 +29,10 @@ use App\Providers\Payments\FakePaymentProvider;
 use App\Providers\Payments\StripePaymentProvider;
 use App\Integrations\Stripe\SdkStripeGateway;
 use App\Integrations\Stripe\StripeGateway;
+use App\Services\AllowAllPhotoModerator;
 use App\Services\LocalBackgroundRemovalRunner;
 use App\Services\LocalImageUpscaler;
+use App\Services\OpenAiPhotoModerator;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use RuntimeException;
@@ -48,6 +51,10 @@ class AppServiceProvider extends ServiceProvider
             'openai' => new OpenAiImageGenerationProvider,
             'fake' => new FakeImageGenerationProvider,
             default => throw new RuntimeException('Unsupported image generation provider.'),
+        });
+        $this->app->bind(PhotoModerator::class, fn () => match (config('artwork.moderation.provider')) {
+            'openai' => new OpenAiPhotoModerator,
+            default => new AllowAllPhotoModerator,
         });
         $this->app->bind(PaymentProvider::class, fn () => match (config('payments.provider')) {
             'fake' => new FakePaymentProvider,

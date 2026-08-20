@@ -40,4 +40,19 @@
 @include('storefront.artwork._workspace', ['session' => $session])
 @endif
 @include('storefront.products._related', ['relatedProducts' => $relatedProducts])
+
+@if(session('moderation_reason'))
+    @php($mr = session('moderation_reason'))
+    <div x-data="{ open: true }" x-show="open" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center p-5" role="dialog" aria-modal="true" aria-labelledby="moderation-title">
+        <div class="absolute inset-0 bg-ink/50" @click="open=false" aria-hidden="true"></div>
+        <div class="relative w-full max-w-md rounded-[2rem] bg-white p-8 text-center shadow-2xl">
+            <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blush/60"><i data-lucide="image" class="h-7 w-7 text-coral" aria-hidden="true"></i></span>
+            <h3 id="moderation-title" class="mt-5 font-display text-2xl">{{ $mr === 'unsafe' ? "This photo can't be used" : "We couldn't spot a face or a pet" }}</h3>
+            <p class="mt-3 text-sm leading-6 text-muted">{{ $mr === 'unsafe'
+                ? "Sorry, this image can't be used for a Kattie gift. Please choose a different photo that follows our content guidelines."
+                : "For lovely artwork we need a clear photo of a person or a pet — cats, dogs and other furry friends (not birds). Please try another photo." }}</p>
+            <button type="button" class="button-primary mt-6 w-full" @click="open=false">Choose another photo</button>
+        </div>
+    </div>
+@endif
 </x-layouts.storefront>
