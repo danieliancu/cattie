@@ -11,6 +11,7 @@ use App\Http\Controllers\Storefront\CheckoutController;
 use App\Http\Controllers\Storefront\CustomerAuthController;
 use App\Http\Controllers\Storefront\GoogleAuthController;
 use App\Http\Controllers\Storefront\HomeController;
+use App\Http\Controllers\Storefront\OrderRecoveryController;
 use App\Http\Controllers\Storefront\InformationPageController;
 use App\Http\Controllers\Storefront\CatalogueController;
 use App\Http\Controllers\Storefront\LegacyCollectionRedirectController;
@@ -93,6 +94,9 @@ Route::post('/checkout/{orderNumber}/payment/stripe-session', [CheckoutControlle
 Route::post('/checkout/{orderNumber}/payment/stripe-status', [CheckoutController::class, 'stripeStatus'])->middleware('throttle:60,1')->name('checkout.stripe-status');
 Route::get('/checkout/{orderNumber}/payment/stripe-return', [CheckoutController::class, 'stripeReturn'])->name('checkout.stripe-return');
 Route::get('/orders/{orderNumber}/confirmation', [CheckoutController::class, 'confirmation'])->name('orders.confirmation');
+// Signed links from abandoned-checkout recovery emails.
+Route::get('/orders/{order}/resume', [OrderRecoveryController::class, 'resume'])->middleware('signed')->name('checkout.resume');
+Route::get('/orders/{order}/stop-reminders', [OrderRecoveryController::class, 'stopReminders'])->middleware('signed')->name('orders.stop-reminders');
 Route::get('/order-support', [OrderSupportController::class, 'create'])->name('order-support.create');
 Route::post('/order-support', [OrderSupportController::class, 'store'])->middleware('throttle:10,60')->name('order-support.store');
 Route::get('/order-support/submitted', [OrderSupportController::class, 'submitted'])->name('order-support.submitted');

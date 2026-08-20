@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('artwork:purge-expired')->dailyAt('03:30')->withoutOverlapping();
+Schedule::command('orders:send-abandoned-recovery')->everyFifteenMinutes()->withoutOverlapping();
