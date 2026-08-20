@@ -6,10 +6,13 @@ use App\Domain\Artwork\Actions\RecordAnalyticsEvent;
 use App\Domain\Orders\Actions\TransitionOrder;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
+use App\Mail\OrderConfirmationMail;
 use App\Models\Payment;
 use App\Models\Cart;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class CompleteSuccessfulPayment
 {
@@ -17,7 +20,9 @@ class CompleteSuccessfulPayment
 
     public function handle(Payment $payment): Payment
     {
-        return DB::transaction(function () use ($payment) {
+        $justPaid = false;
+
+        $payment = DB::transaction(function () use ($payment, &$justPaid) {
             $payment = Payment::query()->lockForUpdate()->findOrFail($payment->id);
             $order = $payment->order()->lockForUpdate()->firstOrFail();
 
@@ -35,8 +40,24 @@ class CompleteSuccessfulPayment
             Cart::query()->where('converted_order_id', $order->id)->update(['status' => 'converted']);
             $this->analytics->handle('payment_succeeded', $payment);
             $this->analytics->handle('order_paid', $order);
+            $justPaid = true;
 
             return $payment->refresh();
         });
+
+        // Send the confirmation once, only on the first successful transition, and
+        // never let an email hiccup surface as a payment failure.
+        if ($justPaid) {
+            try {
+                $order = $payment->order()->first();
+                if ($order && $order->email) {
+                    Mail::to($order->email)->queue(new OrderConfirmationMail($order));
+                }
+            } catch (Throwable $e) {
+                report($e);
+            }
+        }
+
+        return $payment;
     }
 }

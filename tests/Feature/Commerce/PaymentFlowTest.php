@@ -11,6 +11,7 @@ use App\Domain\Payments\Actions\StartPayment;
 use App\Enums\GenerationStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
+use App\Mail\OrderConfirmationMail;
 use App\Models\ArtworkStyle;
 use App\Models\Cart;
 use App\Models\Order;
@@ -19,6 +20,7 @@ use App\Models\ProductVariant;
 use App\Models\ShippingMethod;
 use App\Providers\Payments\FakePaymentProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -94,6 +96,32 @@ class PaymentFlowTest extends TestCase
         $this->assertDatabaseCount('payments', 3);
         $this->assertSame(OrderStatus::Paid, $order->fresh()->status);
         $this->assertDatabaseCount('order_status_transitions', 1);
+    }
+
+    public function test_successful_payment_queues_a_confirmation_email_once(): void
+    {
+        Mail::fake();
+        $order = app(ResolveOrderTotals::class)->handle($this->awaitingOrder());
+        $key = (string) Str::uuid();
+
+        app(StartPayment::class)->handle($order, $key, 'success');
+        Mail::assertQueued(OrderConfirmationMail::class, fn ($mail) => $mail->hasTo('mia@example.com') && $mail->order->is($order));
+
+        // Re-running the completed payment must not send a second confirmation.
+        app(StartPayment::class)->handle($order->fresh(), $key, 'success');
+        Mail::assertQueuedCount(1);
+    }
+
+    public function test_order_confirmation_email_renders_with_branding_and_totals(): void
+    {
+        $order = app(ResolveOrderTotals::class)->handle($this->awaitingOrder())->fresh();
+        $html = (new OrderConfirmationMail($order))->render();
+
+        $this->assertStringContainsString($order->number, $html);
+        $this->assertStringContainsString('Kattie', $html);
+        $this->assertStringContainsString('£28.49', $html);
+        $this->assertStringContainsString('Delivery address', $html);
+        $this->assertStringContainsString('Mia Smith', $html);
     }
 
     public function test_duplicate_payment_submission_is_idempotent_and_amount_is_server_derived(): void
