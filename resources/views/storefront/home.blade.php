@@ -8,6 +8,22 @@
             <x-hero-social-proof class="mt-6" />
         </div>
     </section>
+    {{-- ===== PHONE product tiles under the hero (3 per row, 2 rows) ===== --}}
+    <section class="px-5 pt-8 pb-2 sm:hidden">
+        <div class="grid grid-cols-3 gap-x-3 gap-y-5">
+            @foreach($heroTiles as $tile)
+                @php($tag = $tile['url'] ? 'a' : 'div')
+                <{{ $tag }} @if($tile['url']) href="{{ $tile['url'] }}" @endif class="group flex flex-col items-center text-center">
+                    <div class="flex aspect-square w-full items-center justify-center overflow-hidden rounded-full bg-blush/50 ring-1 ring-ink/5 transition group-hover:-translate-y-0.5">
+                        @if($tile['image'])
+                            <img src="{{ $tile['image'] }}" alt="" aria-hidden="true" loading="lazy" class="h-full w-full object-contain p-2.5 mix-blend-multiply">
+                        @endif
+                    </div>
+                    <h3 class="mt-2.5 line-clamp-2 text-xs font-semibold leading-tight text-ink">{{ $tile['name'] }}</h3>
+                </{{ $tag }}>
+            @endforeach
+        </div>
+    </section>
     <section class="home-hero relative hidden overflow-hidden bg-cream bg-cover bg-[70%_center] bg-no-repeat sm:block" style="background-image: url('{{ asset('images/hero_desktop.png') }}')">
         <div class="absolute inset-0 bg-gradient-to-r from-cream/85 via-cream/35 to-transparent lg:via-transparent"></div>
         <div class="shell relative flex min-h-[600px] items-center pb-36 pt-10 sm:min-h-[640px] lg:pb-44">
