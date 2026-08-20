@@ -26,7 +26,15 @@
 <div class="mt-10 border-t border-rose/25 pt-8"><h2 class="font-display text-2xl">About your gift</h2><div class="mt-4 whitespace-pre-line leading-7 text-muted">{{ $product->description }}</div></div>
 @include('storefront.products._specifications', ['product' => $product])
 @include('storefront.products._shipping-returns')
-</div></div></section>
+</div></div>
+{{-- Full-screen waiting state: shown from the moment "Preview" is pressed until the
+     browser navigates to the artwork progress screen, so there is no dead pause. --}}
+<div x-show="submitting" x-cloak class="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-4 bg-white/90 backdrop-blur" role="status" aria-live="polite">
+    <span class="h-12 w-12 animate-spin rounded-full border-4 border-ink/20 border-t-coral" aria-hidden="true"></span>
+    <p class="font-display text-2xl">Waiting…</p>
+    <p class="text-sm text-muted">Preparing your preview.</p>
+</div>
+</section>
 @endif
 @if($session && !$editing)
 @include('storefront.artwork._workspace', ['session' => $session])

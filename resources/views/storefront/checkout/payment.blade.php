@@ -1,16 +1,20 @@
 <x-layouts.storefront :title="'Payment for '.$order->number.' | Kattie.uk'" description="Review the final total for your Kattie.uk order.">
 <section class="shell py-12 sm:py-20">
     <div class="mx-auto max-w-6xl">
-        <p class="eyebrow">Order {{ $order->number }}</p>
-        <h1 class="mt-3 font-display text-5xl">Complete your order</h1>
-        <p class="mt-5 leading-7 text-muted">Your artwork and final order total are ready.</p>
+        {{-- On phones the Stripe form carries its own summary, so the heading and
+             order summary are hidden to take the customer straight to payment. --}}
+        <div class="hidden sm:block">
+            <p class="eyebrow">Order {{ $order->number }}</p>
+            <h1 class="mt-3 font-display text-5xl">Complete your order</h1>
+            <p class="mt-5 leading-7 text-muted">Your artwork and final order total are ready.</p>
+        </div>
 
         @if(session('payment_message') || $paymentMessage)
             <div class="mt-6 rounded-2xl bg-rose/20 p-4" role="alert">{{ session('payment_message') ?? $paymentMessage }}</div>
         @endif
 
         <div class="mt-10 flex flex-col gap-7 lg:flex-row lg:items-start">
-            <div class="w-full rounded-[2rem] bg-white p-7 lg:flex-1">
+            <div class="hidden w-full rounded-[2rem] bg-white p-7 sm:block lg:flex-1">
                 <h2 class="font-display text-2xl">Order summary</h2>
                 @foreach($order->items as $item)
                     <div class="mt-5 grid grid-cols-[4rem_1fr_auto] items-center gap-4 border-t border-rose/20 pt-5">

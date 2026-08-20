@@ -273,7 +273,7 @@
                         <input type="hidden" name="asset_id" :value="selectedAssetId">
                         <input type="hidden" name="design_id" :value="selectedDesignId">
                         <input type="hidden" name="render_fingerprint" :value="renderFingerprint">
-                        <button class="button-primary w-full" :disabled="changingColour || updatingName || savingLayout || !renderFingerprint || nameValue !== savedNameValue">Add to basket</button>
+                        <button class="button-primary w-full" :disabled="changingColour || updatingName || savingLayout || !renderFingerprint || nameValue !== savedNameValue">Approve and add to basket</button>
                     </form>
                     <form method="POST" action="{{ route('artwork.change', $session->public_id) }}" class="mt-4 text-center">
                         @csrf

@@ -46,7 +46,7 @@ class CartCheckoutTest extends TestCase
         $session->update(['status' => ArtworkSessionStatus::PreviewReady, 'current_generation_id' => $session->approvedAsset->generation_id, 'approved_generation_asset_id' => null, 'approved_at' => null]);
 
         $this->withCookie('cattie_guest_token', 'owner-secret')->get(route('products.show', $session->product->slug))
-            ->assertOk()->assertSee('Add to basket')->assertSee('Change artwork')->assertDontSee('Love it');
+            ->assertOk()->assertSee('Approve and add to basket')->assertSee('Change artwork')->assertDontSee('Love it');
         $this->withCookie('cattie_guest_token', 'owner-secret')->post(route('artwork.cart', $session->public_id))
             ->assertRedirect(route('cart.index'));
 
