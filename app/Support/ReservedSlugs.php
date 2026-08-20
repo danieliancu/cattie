@@ -20,7 +20,7 @@ final class ReservedSlugs
 {
     public const SLUGS = [
         // Storefront routes.
-        'account', 'address-autocomplete', 'address-lookup', 'admin-preview', 'artwork',
+        'account', 'address-autocomplete', 'address-lookup', 'admin-preview', 'artwork', 'auth',
         'cart', 'checkout', 'collections', 'delivery-shipping', 'faq', 'login', 'logout',
         'manage-cookies', 'order-support', 'orders', 'payment-methods', 'privacy-policy',
         'products', 'register', 'returns-policy', 'sitemap', 'terms-and-conditions',

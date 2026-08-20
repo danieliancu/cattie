@@ -13,8 +13,10 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\User;
+use App\Notifications\EmailVerificationCodeNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -23,15 +25,39 @@ class CustomerAccountTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_customer_can_register_login_and_logout_without_admin_access(): void
+    public function test_customer_registers_verifies_by_email_code_then_can_login_and_logout(): void
     {
+        Notification::fake();
         $response = $this->post(route('register.store'), ['email' => 'CUSTOMER@example.com', 'password' => 'password123', 'password_confirmation' => 'password123']);
         $user = User::query()->where('email', 'customer@example.com')->firstOrFail();
-        $response->assertRedirect(route('account.index'));
+
+        // Registration creates the account but holds it unverified behind the email code.
+        $response->assertRedirect(route('verification.notice'));
         $this->assertAuthenticatedAs($user);
+        $this->assertFalse($user->hasVerifiedEmail());
         $this->assertNull($user->name);
         $this->assertFalse($user->is_admin);
         $this->assertTrue(Hash::check('password123', $user->password));
+
+        // The account area is gated until the email is confirmed.
+        $this->get(route('account.index'))->assertRedirect(route('verification.notice'));
+
+        // The code screen renders with the pending email and a resend option.
+        $this->get(route('verification.notice'))->assertOk()->assertSee('customer@example.com')->assertSee('send a new code');
+
+        $code = null;
+        Notification::assertSentTo($user, EmailVerificationCodeNotification::class, function ($notification) use (&$code) {
+            $code = $notification->code;
+
+            return true;
+        });
+
+        // A wrong code is rejected; the correct one verifies and opens the account.
+        $this->post(route('register.verify.store'), ['code' => '000000' === $code ? '111111' : '000000'])->assertSessionHasErrors('code');
+        $this->assertFalse($user->fresh()->hasVerifiedEmail());
+        $this->post(route('register.verify.store'), ['code' => $code])->assertRedirect(route('account.index'));
+        $this->assertTrue($user->fresh()->hasVerifiedEmail());
+
         $this->get('/admin')->assertForbidden();
         $this->post(route('logout'))->assertRedirect(route('home'));
         $this->assertGuest();
@@ -80,16 +106,29 @@ class CustomerAccountTest extends TestCase
 
     public function test_verified_guest_order_is_claimed_individually_and_idempotently(): void
     {
+        Notification::fake();
         $claimable = $this->order(null, 'CAT-CLAIM', OrderStatus::Paid, now(), 'mia@example.com', 'owner-token');
         $sameEmail = $this->order(null, 'CAT-NOT-CLAIMED', OrderStatus::Paid, now(), 'mia@example.com', 'different-token');
-        $response = $this->withCookie('cattie_guest_token', 'owner-token')->post(route('register.store'), [
+        $this->withCookie('cattie_guest_token', 'owner-token')->post(route('register.store'), [
             'email' => 'mia@example.com', 'password' => 'password123', 'password_confirmation' => 'password123', 'claim_order' => $claimable->number,
-        ]);
+        ])->assertRedirect(route('verification.notice'));
         $user = User::query()->where('email', 'mia@example.com')->firstOrFail();
-        $response->assertRedirect(route('account.orders.show', $claimable->number));
+
+        // The claim is deferred until the email code is confirmed.
+        $this->assertNull($claimable->fresh()->user_id);
+
+        $code = null;
+        Notification::assertSentTo($user, EmailVerificationCodeNotification::class, function ($notification) use (&$code) {
+            $code = $notification->code;
+
+            return true;
+        });
+
+        $this->withCookie('cattie_guest_token', 'owner-token')->post(route('register.verify.store'), ['code' => $code])
+            ->assertRedirect(route('account.orders.show', $claimable->number));
         $this->assertSame($user->id, $claimable->fresh()->user_id);
         $this->assertNull($sameEmail->fresh()->user_id);
-        $this->withCookie('cattie_guest_token', 'owner-token')->actingAs($user)->get(route('account.orders.show', $claimable->number))->assertOk();
+        $this->withCookie('cattie_guest_token', 'owner-token')->actingAs($user->fresh())->get(route('account.orders.show', $claimable->number))->assertOk();
     }
 
     public function test_login_preserves_browser_cart_and_merges_existing_user_cart(): void

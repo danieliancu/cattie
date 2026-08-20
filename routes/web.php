@@ -8,6 +8,7 @@ use App\Http\Controllers\Storefront\CartController;
 use App\Http\Controllers\Storefront\CustomerProfileController;
 use App\Http\Controllers\Storefront\CheckoutController;
 use App\Http\Controllers\Storefront\CustomerAuthController;
+use App\Http\Controllers\Storefront\GoogleAuthController;
 use App\Http\Controllers\Storefront\HomeController;
 use App\Http\Controllers\Storefront\InformationPageController;
 use App\Http\Controllers\Storefront\CatalogueController;
@@ -26,15 +27,24 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [CustomerAuthController::class, 'login'])->middleware('throttle:10,1')->name('login.store');
     Route::get('/register', [CustomerAuthController::class, 'registerForm'])->name('register');
     Route::post('/register', [CustomerAuthController::class, 'register'])->middleware('throttle:10,1')->name('register.store');
+    Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect'])->middleware('throttle:20,1')->name('auth.google.redirect');
+    Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->middleware('throttle:20,1')->name('auth.google.callback');
 });
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [CustomerAuthController::class, 'logout'])->name('logout');
-    Route::get('/account', [AccountController::class, 'index'])->name('account.index');
-    Route::get('/account/orders', [AccountController::class, 'orders'])->name('account.orders.index');
-    Route::get('/account/orders/{orderNumber}', [AccountController::class, 'show'])->name('account.orders.show');
-    Route::get('/account/orders/{orderNumber}/items/{item}/artwork', [AccountController::class, 'artwork'])->name('account.orders.artwork');
-    Route::get('/account/details', [CustomerProfileController::class, 'edit'])->name('account.details');
-    Route::patch('/account/details', [CustomerProfileController::class, 'update'])->middleware('throttle:60,1')->name('account.details.update');
+    // Email-verification screen: reachable while signed in but not yet verified.
+    Route::get('/register/verify', [CustomerAuthController::class, 'verifyForm'])->name('verification.notice');
+    Route::post('/register/verify', [CustomerAuthController::class, 'verify'])->middleware('throttle:10,1')->name('register.verify.store');
+    Route::post('/register/verify/resend', [CustomerAuthController::class, 'resend'])->middleware('throttle:3,1')->name('register.verify.resend');
+
+    Route::middleware('verified')->group(function () {
+        Route::get('/account', [AccountController::class, 'index'])->name('account.index');
+        Route::get('/account/orders', [AccountController::class, 'orders'])->name('account.orders.index');
+        Route::get('/account/orders/{orderNumber}', [AccountController::class, 'show'])->name('account.orders.show');
+        Route::get('/account/orders/{orderNumber}/items/{item}/artwork', [AccountController::class, 'artwork'])->name('account.orders.artwork');
+        Route::get('/account/details', [CustomerProfileController::class, 'edit'])->name('account.details');
+        Route::patch('/account/details', [CustomerProfileController::class, 'update'])->middleware('throttle:60,1')->name('account.details.update');
+    });
 });
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');
 Route::get('/products/{slug}', [ProductController::class, 'show'])->name('products.show');

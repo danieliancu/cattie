@@ -7,6 +7,7 @@
         <label class="block"><span class="text-sm font-bold">Password</span><input type="password" name="password" autocomplete="new-password" required class="mt-2 w-full rounded-xl border border-rose/30 bg-cream px-4 py-3">@error('password')<span class="mt-2 block text-sm text-red-700">{{ $message }}</span>@enderror</label>
         <label class="block"><span class="text-sm font-bold">Confirm password</span><input type="password" name="password_confirmation" autocomplete="new-password" required class="mt-2 w-full rounded-xl border border-rose/30 bg-cream px-4 py-3"></label>
         <button class="button-primary w-full">Create account</button>
+        @include('storefront.auth._google', ['label' => 'Sign up with Google'])
     </form>
     <p class="mt-6 text-center text-sm text-muted">Already have an account? <a class="font-bold text-coral" href="{{ route('login', array_filter(['claim_order' => $claimOrder])) }}">Sign in</a></p>
 </div></section>

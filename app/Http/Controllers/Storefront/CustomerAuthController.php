@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Storefront;
 
+use App\Domain\Auth\Actions\SendEmailVerificationCode;
 use App\Domain\Cart\Actions\MergeCustomerCart;
 use App\Domain\Orders\Actions\ClaimGuestOrder;
 use App\Http\Controllers\Controller;
+use App\Models\EmailVerificationCode;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\GuestContext;
@@ -23,15 +25,25 @@ final class CustomerAuthController extends Controller
         return view('storefront.auth.login', ['claimOrder' => $this->claimNumber($request)]);
     }
 
-    public function login(Request $request, MergeCustomerCart $merge, ClaimGuestOrder $claim): RedirectResponse
+    public function login(Request $request, MergeCustomerCart $merge, ClaimGuestOrder $claim, SendEmailVerificationCode $sendCode): RedirectResponse
     {
         $data = $request->validate(['email' => ['required', 'email:rfc'], 'password' => ['required', 'string'], 'remember' => ['nullable', 'boolean'], 'claim_order' => ['nullable', 'string', 'max:40']]);
         if (! Auth::attempt(['email' => strtolower($data['email']), 'password' => $data['password'], 'is_admin' => false], (bool) ($data['remember'] ?? false))) {
             throw ValidationException::withMessages(['email' => 'These credentials do not match our records.']);
         }
         $request->session()->regenerate();
-        $merge->handle($request, $request->user());
-        $order = ! empty($data['claim_order']) ? $claim->handle($data['claim_order'], $request, $request->user()) : null;
+        $user = $request->user();
+
+        // An account that never finished email verification is sent back to the code screen.
+        if (! $user->hasVerifiedEmail()) {
+            $sendCode->handle($user);
+            $request->session()->put('registration_claim_order', $data['claim_order'] ?? null);
+
+            return redirect()->route('verification.notice');
+        }
+
+        $merge->handle($request, $user);
+        $order = ! empty($data['claim_order']) ? $claim->handle($data['claim_order'], $request, $user) : null;
 
         return $order ? redirect()->route('account.orders.show', $order->number) : redirect()->intended(route('account.index'));
     }
@@ -48,16 +60,72 @@ final class CustomerAuthController extends Controller
         return view('storefront.auth.register', compact('claimOrder', 'email'));
     }
 
-    public function register(Request $request, MergeCustomerCart $merge, ClaimGuestOrder $claim): RedirectResponse
+    public function register(Request $request, SendEmailVerificationCode $sendCode): RedirectResponse
     {
         $data = $request->validate(['email' => ['required', 'email:rfc', 'max:254', 'unique:users,email'], 'password' => ['required', 'confirmed', Password::min(8)], 'claim_order' => ['nullable', 'string', 'max:40']]);
         $user = User::query()->create(['email' => strtolower($data['email']), 'password' => Hash::make($data['password']), 'is_admin' => false]);
         Auth::login($user);
         $request->session()->regenerate();
+
+        // The account exists but stays unverified until the emailed code is confirmed.
+        $sendCode->handle($user);
+        $request->session()->put('registration_claim_order', $data['claim_order'] ?? null);
+
+        return redirect()->route('verification.notice');
+    }
+
+    public function verifyForm(Request $request): View|RedirectResponse
+    {
+        $user = $request->user();
+        if ($user->hasVerifiedEmail()) {
+            return redirect()->route('account.index');
+        }
+
+        return view('storefront.auth.verify', ['email' => $user->email]);
+    }
+
+    public function verify(Request $request, MergeCustomerCart $merge, ClaimGuestOrder $claim): RedirectResponse
+    {
+        $user = $request->user();
+        if ($user->hasVerifiedEmail()) {
+            return redirect()->route('account.index');
+        }
+
+        $data = $request->validate(['code' => ['required', 'string', 'max:10']]);
+        $code = preg_replace('/\D/', '', $data['code']);
+
+        $record = EmailVerificationCode::query()->where('user_id', $user->id)->first();
+        if (! $record || $record->isExpired()) {
+            throw ValidationException::withMessages(['code' => 'This code has expired. Please request a new one.']);
+        }
+        if ($record->attempts >= 5) {
+            throw ValidationException::withMessages(['code' => 'Too many attempts. Please request a new code.']);
+        }
+        if ($code === '' || ! Hash::check($code, $record->code_hash)) {
+            $record->increment('attempts');
+            throw ValidationException::withMessages(['code' => 'That code is not correct.']);
+        }
+
+        $user->markEmailAsVerified();
+        $record->delete();
+
         $merge->handle($request, $user);
-        $order = ! empty($data['claim_order']) ? $claim->handle($data['claim_order'], $request, $user) : null;
+        $claimOrder = $request->session()->pull('registration_claim_order');
+        $order = ! empty($claimOrder) ? $claim->handle($claimOrder, $request, $user) : null;
 
         return $order ? redirect()->route('account.orders.show', $order->number) : redirect()->intended(route('account.index'));
+    }
+
+    public function resend(Request $request, SendEmailVerificationCode $sendCode): RedirectResponse
+    {
+        $user = $request->user();
+        if ($user->hasVerifiedEmail()) {
+            return redirect()->route('account.index');
+        }
+
+        $sendCode->handle($user);
+
+        return back()->with('status', 'We have sent you a new code.');
     }
 
     public function logout(Request $request): RedirectResponse

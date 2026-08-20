@@ -34,7 +34,7 @@
             </div>
             <div class="relative z-20 flex min-h-dvh items-center justify-center overflow-y-auto p-5 sm:p-10" role="dialog" aria-modal="true" aria-labelledby="artwork-progress-title" aria-live="polite">
                 <div class="relative w-full max-w-xl text-white lg:rounded-[2rem] lg:bg-black lg:p-12 lg:shadow-2xl">
-                    <form x-show="!failed && !ready" method="POST" action="{{ route('artwork.cancel', $session->public_id) }}" class="absolute -top-14 right-0">@csrf<button type="submit" class="flex h-10 w-10 cursor-pointer items-center justify-center text-white transition hover:scale-110" aria-label="Cancel artwork creation" title="Cancel artwork creation"><i data-lucide="x" class="h-9 w-9" stroke-width="2.5" aria-hidden="true"></i></button></form>
+                    <form x-show="!ready" method="POST" action="{{ route('artwork.cancel', $session->public_id) }}" class="absolute -top-14 right-0">@csrf<button type="submit" class="flex h-10 w-10 cursor-pointer items-center justify-center text-white transition hover:scale-110" aria-label="Cancel artwork creation" title="Cancel artwork creation"><i data-lucide="x" class="h-9 w-9" stroke-width="2.5" aria-hidden="true"></i></button></form>
                     <h1 id="artwork-progress-title" class="font-display text-4xl sm:text-5xl" x-text="failed ? 'We couldn’t create your artwork this time.' : (ready ? 'Your design is ready' : 'Creating your artwork…')">Creating your artwork…</h1>
                     <ol class="mt-10 space-y-4 text-left sm:mt-12">
                         <template x-for="(step, index) in steps" :key="step.key">
